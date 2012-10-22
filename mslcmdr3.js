@@ -125,7 +125,6 @@ MC.TitleState = function() {
 
 MC.TitleState.prototype.activate = function() {
   var i, topOffset, leftOffset;
-  var showDuration;
 
   MC.log('activating TitleState');
   $('#score').hide();
@@ -139,7 +138,6 @@ MC.TitleState.prototype.activate = function() {
 
   // create the title spans
   $('#text_overlay').empty();
-  //$('#text_overlay').hide();
   $('#text_overlay').append(
     '<span class="title_overlay" id="title1">M</span>' +
     '<span class="title_overlay" id="title2">s</span>' +
@@ -167,15 +165,10 @@ MC.TitleState.prototype.activate = function() {
   });
 
   // add chained fade-ins on title letters
-  showDuration = 500;
-  $('.title_overlay').each(function(idx) {
-    MC.log('fading in letter ' + idx);
-    //$(this).delay(idx * 200).show();
-    $(this).delay(idx * 200).fadeOut('slow');
+  $('.title_overlay').css('display', 'none');
+  $('.title_overlay').delay(800).each(function(idx) {
+    $(this).delay(idx * 200).fadeIn(2000);
   });
-
-
-
 };
 
 MC.TitleState.prototype.deactivate = function() {
@@ -219,7 +212,13 @@ MC.Ground = function() {
  * Cities
  ****************/
 MC.City = function(pos) {
-
+  this.centerX = 300 + (200 * pos);
+  this.geometry = new THREE.CubeGeometry(50, 100, 50);
+  this.material = new THREE.MeshLambertMaterial({ color: 0x223344 });
+  this.mesh = new THREE.Mesh(this.geometry, this.material);
+  this.mesh.position.set(this.centerX, 50, 0);
+  MC.scene.add(this.mesh);
+  MC.log('building city ' + pos + ' at x=' + this.centerX);
 };
 
 /****************
