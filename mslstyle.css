@@ -1,0 +1,57 @@
+body {
+  margin: 0px;
+  font-family: Helvetica;
+  color: white;
+  background-color: #111111;
+}
+
+div {
+  border: solid 0px red;
+}
+
+.content {
+  margin: 0 auto;
+  padding: 0px;
+  display: block;
+  width: 825px;
+}
+
+.title {
+  margin: 0 auto;
+  width: 25%;
+  height: 75px;
+  line-height: 75px;
+  text-align: center;
+  font-size: 18pt;
+  font-weight: bold;
+  color: gray;
+}
+
+.game_container {
+  position: relative;
+  border: 4px ridge gray;
+  margin: 0 auto;
+  width: 800px;
+  height: 480px;
+}
+
+.score {
+  position: absolute;
+  top: 0px;
+}
+
+.perf_stats {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+}
+
+.text_overlay {
+  position: absolute;
+}
+
+.debug_text {
+  position: absolute;
+  bottom: 0px;
+  left: 0px;
+}
