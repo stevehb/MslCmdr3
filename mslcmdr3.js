@@ -7,8 +7,9 @@ $(document).ready(function() {
   // constants
   MC.WIDTH = $('#game_container').width();
   MC.HEIGHT = $('#game_container').height();
-  MC.CAMERA_ORIGIN = new THREE.Vector3(0, 300, -800);
-  MC.CAMERA_LOOK_AT = new THREE.Vector3(0, 200, 200);
+  MC.CENTER_X = 700;
+  MC.CAMERA_ORIGIN = new THREE.Vector3(MC.CENTER_X, 350, 800);
+  MC.CAMERA_LOOK_AT = new THREE.Vector3(MC.CENTER_X, 200, -200);
 
   // set up three.js basics
   MC.log('setting up three.js basics');
@@ -18,38 +19,24 @@ $(document).ready(function() {
   MC.camera.position.copy(MC.CAMERA_ORIGIN);
   MC.camera.lookAt(MC.CAMERA_LOOK_AT);
   MC.renderer.setSize(MC.WIDTH, MC.HEIGHT);
-  MC.renderer.setClearColorHex(0x181818, 1.0);
+  MC.renderer.setClearColorHex(0x111111, 1.0);
   $(MC.renderer.domElement).attr('id', 'game_canvas');
   $('#game_container').append(MC.renderer.domElement);
 
   // add lighting
-  /*
-  MC.lights = new Array();
-  for(i = 0; i < 7; i++) {
-    MC.lights[i] = new THREE.SpotLight(0xffffff, 50, 0, false);
-    MC.lights[i].position.set(100 + (200 * i), 500, 0);
-    MC.scene.add(MC.lights[i]);
-  }
-  */
-  var pointLight = new THREE.PointLight(0xffffff, 50, 950);
-  pointLight.position.set(0, 100, 0);
-  MC.scene.add(pointLight);
+  MC.ambientLight = new THREE.AmbientLight(0xdddddd);
+  MC.scene.add(MC.ambientLight);
 
   // set up extensions: stats counter, keyboard state, click handlers
   MC.log('adding stats counter');
   MC.stats = new Stats();
   $('#perf_stats').append(MC.stats.domElement);
   MC.keyboard = new THREEx.KeyboardState();
-  $("#game_canvas").mousedown(MC.click);
-  $("#game_canvas").rightMouseDown(MC.click);
 
   // create the game state stack
   MC.stateStack = new Array();
   MC.stateStack.push(new MC.TitleState());
   MC.stateStack[MC.stateStack.length-1].activate();
-
-
-
 
   // add mousemove scene scrolling
   // add to game_container so that scroll works with overlays
@@ -59,12 +46,13 @@ $(document).ready(function() {
     var y = evt.clientY - rect.top;
     var pctX = (x - (MC.WIDTH / 2)) / (MC.WIDTH / 2);
     var pctY = (y - (MC.HEIGHT / 2)) / (MC.HEIGHT / 2);
-    var camOffsetX = pctX * 20;
+    var camOffsetX = pctX * 50;
     var camOffsetY = pctY * 20;
     MC.camera.position.set(camOffsetX, camOffsetY, 0);
     MC.camera.position.addSelf(MC.CAMERA_ORIGIN);
     MC.camera.lookAt(MC.CAMERA_LOOK_AT);
   });
+  $("#game_container").noContext();
 
   MC.lastTime = Date.now();
   MC.update();
@@ -78,17 +66,17 @@ MC.update = function() {
   MC.lastTime = currentTime;
 
   // DEBUG cam movement
-  if(MC.keyboard.pressed('down')) {
+  if(MC.keyboard.pressed('w')) {
     MC.camera.position.z -= 5;
-  } else if(MC.keyboard.pressed('up')) {
-    MC.camera.position.z += 5;
-  } else if(MC.keyboard.pressed('left')) {
-    MC.camera.position.x += 5;
-  } else if(MC.keyboard.pressed('right')) {
-    MC.camera.position.x -= 5;
-  } else if(MC.keyboard.pressed('w')) {
-    MC.camera.position.y += 5;
   } else if(MC.keyboard.pressed('s')) {
+    MC.camera.position.z += 5;
+  } else if(MC.keyboard.pressed('a')) {
+    MC.camera.position.x -= 5;
+  } else if(MC.keyboard.pressed('d')) {
+    MC.camera.position.x += 5;
+  } else if(MC.keyboard.pressed('up')) {
+    MC.camera.position.y += 5;
+  } else if(MC.keyboard.pressed('down')) {
     MC.camera.position.y -= 5;
   }
   MC.debug('cam.pos=', MC.camera.position.x, MC.camera.position.y, MC.camera.position.z);
@@ -110,6 +98,7 @@ MC.log = function(msg) {
   console.log('MC: ' + msg);
 };
 
+
 MC.debug = function(msg, val1, val2, val3) {
   $('#debug_text').text('DEBUG: ' + msg +
     '[' + val1.toFixed(3) + ', ' + val2.toFixed(3) + ', ' + val3.toFixed(3) + ']');
@@ -122,6 +111,7 @@ MC.debug = function(msg, val1, val2, val3) {
 MC.TitleState = function() {
   this.isActive = false;
 };
+
 
 MC.TitleState.prototype.activate = function() {
   var i, topOffset, leftOffset;
@@ -139,14 +129,31 @@ MC.TitleState.prototype.activate = function() {
   // create the title spans
   $('#text_overlay').empty();
   $('#text_overlay').append(
-    '<span class="title_overlay" id="title1">M</span>' +
-    '<span class="title_overlay" id="title2">s</span>' +
-    '<span class="title_overlay" id="title3">l</span>' +
-    '<span class="title_overlay" id="title4">C</span>' +
-    '<span class="title_overlay" id="title5">m</span>' +
-    '<span class="title_overlay" id="title6">d</span>' +
-    '<span class="title_overlay" id="title7">r</span>' +
-    '<span class="title_overlay" id="title8">3</span>');
+    '<span class="title_overlay">M</span>' +
+    '<span class="title_overlay">s</span>' +
+    '<span class="title_overlay">l</span>' +
+    '<span class="title_overlay">C</span>' +
+    '<span class="title_overlay">m</span>' +
+    '<span class="title_overlay">d</span>' +
+    '<span class="title_overlay">r</span>' +
+    '<span class="title_overlay" last="true">3</span>' +
+    '<br />' +
+    '<span id="title_overlay_subtitle">' +
+    '<span class="title_overlay_small">C</span>' +
+    '<span class="title_overlay_small">l</span>' +
+    '<span class="title_overlay_small">i</span>' +
+    '<span class="title_overlay_small">c</span>' +
+    '<span class="title_overlay_small">k</span>' +
+    '<span class="title_overlay_small">&nbsp;</span>' +
+    '<span class="title_overlay_small">T</span>' +
+    '<span class="title_overlay_small">o</span>' +
+    '<span class="title_overlay_small">&nbsp;</span>' +
+    '<span class="title_overlay_small">S</span>' +
+    '<span class="title_overlay_small">t</span>' +
+    '<span class="title_overlay_small">a</span>' +
+    '<span class="title_overlay_small">r</span>' +
+    '<span class="title_overlay_small">t</span>' +
+    '</span>');
   $('.title_overlay').css({
     'margin-left': '8px',
     'margin-right': '8px',
@@ -156,6 +163,14 @@ MC.TitleState.prototype.activate = function() {
     'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
   });
 
+  $('.title_overlay_small').css({
+    'margin-left': '2px',
+    'margin-right': '2px',
+    'font-size': '24pt',
+    'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
+    'color': 'red'
+  });
+
   // set title position
   topOffset = (MC.HEIGHT - $('#text_overlay').height()) / 2;
   leftOffset = (MC.WIDTH - $('#text_overlay').width()) / 2;
@@ -163,21 +178,41 @@ MC.TitleState.prototype.activate = function() {
     'top': topOffset + 'px',
     'left': leftOffset + 'px'
   });
+  leftOffset = ($('#text_overlay').width() - $('#title_overlay_subtitle').width()) / 2;
+  $('#title_overlay_subtitle').css({ 'margin-left': leftOffset + 'px' });
 
   // add chained fade-ins on title letters
-  $('.title_overlay').css('display', 'none');
+  $('.title_overlay,.title_overlay_small').css('display', 'none');
   $('.title_overlay').delay(800).each(function(idx) {
-    $(this).delay(idx * 200).fadeIn(2000);
+    $(this).delay(idx * 200).fadeIn(2000, function() {
+      if($(this).attr('last') == 'true') {
+        $('.title_overlay_small').delay(500).fadeIn(2000);
+      }
+    });
   });
+
+  // add click event handler
+  $("#game_canvas").mousedown(this.onclick);
+  $("#game_canvas").rightMouseDown(this.onclick);
 };
+
 
 MC.TitleState.prototype.deactivate = function() {
   MC.log('deactivating TitleState');
   this.isActive = false;
-  // TODO: hide the title
+  $('#text_overlay').hide();
 };
 
-MC.TitleState.prototype.update = function() {
+
+MC.TitleState.prototype.onclick = function(evt) {
+  MC.stateStack[MC.stateStack.length-1].deactivate();
+  MC.stateStack.push(new MC.PlayState());
+  MC.stateStack[MC.stateStack.length-1].activate();
+  return false;
+};
+
+
+MC.TitleState.prototype.update = function(elapsed) {
   // TODO: wait for click to go to next state
 };
 
@@ -185,6 +220,39 @@ MC.TitleState.prototype.update = function() {
 /****************
  * PlayState
  ****************/
+MC.PlayState = function() {
+  var i;
+
+  // load levels
+  this.currentLevel = 1;
+
+
+  // turn on score
+  this.score = 0;
+  $('#score').show();
+};
+
+
+MC.PlayState.prototype.activate = function() {
+  MC.log('activating PlayState');
+};
+
+
+MC.PlayState.prototype.deactivate = function() {
+  MC.log('deactivating PlayState');
+  this.isActive = false;
+  // TODO: hide the title
+};
+
+
+MC.PlayState.prototype.onclick = function(evt) {
+  return false;
+};
+
+
+MC.PlayState.prototype.update = function(elapsed) {
+  // TODO: wait for click to go to next state
+};
 
 
 /****************
@@ -201,10 +269,30 @@ MC.TitleState.prototype.update = function() {
  * Ground
  ****************/
 MC.Ground = function() {
-  this.geometry = new THREE.CubeGeometry(1400, 1, 200);
-  this.material = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+  // load texture
+  var groundTexture = THREE.ImageUtils.loadTexture("img/ground_texture.png");
+  groundTexture.wrapS = THREE.RepeatWrapping;
+  groundTexture.wrapT = THREE.RepeatWrapping;
+  groundTexture.anisotropy = 16;
+  groundTexture.repeat.set(7, 3);
+  this.material = new THREE.MeshPhongMaterial({
+    map: groundTexture,
+    color: 0x00ff00,
+    ambient: 0x00ff00,
+    shading: THREE.SmoothShading
+  });
+
+  // create mesh
+  this.geometry = new THREE.CubeGeometry(MC.CENTER_X * 2, 25, 200);
   this.mesh = new THREE.Mesh(this.geometry, this.material);
+  this.mesh.translateX(MC.CENTER_X);
+  this.mesh.translateY(-12.5);
   MC.scene.add(this.mesh);
+};
+
+
+MC.Ground.prototype.removeSelf = function() {
+  MC.scene.remove(this.mesh);
 };
 
 
@@ -212,18 +300,36 @@ MC.Ground = function() {
  * Cities
  ****************/
 MC.City = function(pos) {
+  var buildingTexture = THREE.ImageUtils.loadTexture("img/building_texture.png");
+  buildingTexture.wrapS = THREE.RepeatWrapping;
+  buildingTexture.wrapT = THREE.RepeatWrapping;
+  buildingTexture.anisotropy = 16;
+  this.material = new THREE.MeshPhongMaterial({
+    map: buildingTexture,
+    color: 0xffffff,
+    ambient: 0xaaaaaa,
+    shading: THREE.SmoothShading
+  });
+
   this.centerX = 300 + (200 * pos);
   this.geometry = new THREE.CubeGeometry(50, 100, 50);
-  this.material = new THREE.MeshLambertMaterial({ color: 0x223344 });
   this.mesh = new THREE.Mesh(this.geometry, this.material);
   this.mesh.position.set(this.centerX, 50, 0);
   MC.scene.add(this.mesh);
-  MC.log('building city ' + pos + ' at x=' + this.centerX);
 };
+
+
+MC.City.prototype.removeSelf = function() {
+  MC.scene.remove(this.mesh);
+};
+
 
 /****************
  * Bases
  ****************/
+ MC.Base = function(which) {
+
+ };
 
 
 /****************
