@@ -1,0 +1,34 @@
+{
+  "levels": [
+  {
+    "title": "Cuban Missile Crisis",
+    "end_text": "End of the Cuban Missile Crisis",
+    "waves": [
+      {
+        "missile_type": "icbm",
+        "progress_type": "count",
+        "limit": 50,
+        "rate_per_sec": 3,
+        "speed": 75,
+        "color": "0xff0000",
+        "point_value": 100
+      },
+      {
+        "missile_type": "icbm,cluster",
+        "progress_type": "time",
+        "limit": 15000,
+        "rate_per_sec": 4,
+        "speed": 50,
+        "color": "0xff7700",
+        "point_value": 150
+      }
+    ]
+  },
+  {
+    "title": "Cold War",
+    "end_text": "End of the Cold War",
+    "waves": [
+    ]
+  }
+]
+}

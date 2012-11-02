@@ -10,11 +10,13 @@ $(document).ready(function() {
   MC.CENTER_X = 700;
   MC.CAMERA_ORIGIN = new THREE.Vector3(MC.CENTER_X, 350, 800);
   MC.CAMERA_LOOK_AT = new THREE.Vector3(MC.CENTER_X, 200, -200);
+  MC.TITLE_DURATION = 3000;
+  MC.END_DURATION = 5000;
 
   // set up three.js basics
   MC.log('setting up three.js basics');
   MC.scene = new THREE.Scene();
-  MC.camera = new THREE.PerspectiveCamera(50, MC.WIDTH / MC.HEIGHT, 1, 10000);
+  MC.camera = new THREE.PerspectiveCamera(55, MC.WIDTH / MC.HEIGHT, 1, 10000);
   MC.renderer = new THREE.WebGLRenderer({ antialias: true });
   MC.camera.position.copy(MC.CAMERA_ORIGIN);
   MC.camera.lookAt(MC.CAMERA_LOOK_AT);
@@ -38,7 +40,16 @@ $(document).ready(function() {
   MC.stateStack.push(new MC.TitleState());
   MC.stateStack[MC.stateStack.length-1].activate();
 
-  // add mousemove scene scrolling
+  // grab the level descriptions
+  $.ajax({
+    url: 'level_desc.json',
+    dataType: 'text',
+    async: false
+  }).done(function(resp) { 
+    MC.levels = JSON.parse(resp).levels;
+  });
+
+  // DEBUG: add mousemove scene scrolling
   // add to game_container so that scroll works with overlays
   $('#game_container').mousemove(function(evt) {
     var rect = MC.renderer.domElement.getBoundingClientRect();
@@ -57,7 +68,6 @@ $(document).ready(function() {
   MC.lastTime = Date.now();
   MC.update();
 });
-
 
 MC.update = function() {
   var nStates;
@@ -93,11 +103,9 @@ MC.update = function() {
   }
 };
 
-
 MC.log = function(msg) {
   console.log('MC: ' + msg);
 };
-
 
 MC.debug = function(msg, val1, val2, val3) {
   $('#debug_text').text('DEBUG: ' + msg +
@@ -112,19 +120,20 @@ MC.TitleState = function() {
   this.isActive = false;
 };
 
-
 MC.TitleState.prototype.activate = function() {
   var i, topOffset, leftOffset;
 
   MC.log('activating TitleState');
   $('#score').hide();
-  this.isActive = true;
 
   MC.ground = new MC.Ground();
   MC.cities = new Array(5);
   for(i = 0; i < 5; i++) {
     MC.cities[i] = new MC.City(i);
   }
+  MC.bases = new Array();
+  MC.bases.push(new MC.Base('left'));
+  MC.bases.push(new MC.Base('right'));
 
   // create the title spans
   $('#text_overlay').empty();
@@ -191,18 +200,16 @@ MC.TitleState.prototype.activate = function() {
     });
   });
 
-  // add click event handler
-  $("#game_canvas").mousedown(this.onclick);
-  $("#game_canvas").rightMouseDown(this.onclick);
+  // add click event handler, disable text selector
+  $("#game_canvas").bind('mousedown', this.onclick);
+  $('#text_overlay').find('*').css('cursor', 'default');
 };
-
 
 MC.TitleState.prototype.deactivate = function() {
   MC.log('deactivating TitleState');
-  this.isActive = false;
   $('#text_overlay').hide();
+  $("#game_canvas").unbind('mousedown', this.onclick);
 };
-
 
 MC.TitleState.prototype.onclick = function(evt) {
   MC.stateStack[MC.stateStack.length-1].deactivate();
@@ -211,9 +218,8 @@ MC.TitleState.prototype.onclick = function(evt) {
   return false;
 };
 
-
 MC.TitleState.prototype.update = function(elapsed) {
-  // TODO: wait for click to go to next state
+  // waiting for click; nothing to do here
 };
 
 
@@ -221,37 +227,145 @@ MC.TitleState.prototype.update = function(elapsed) {
  * PlayState
  ****************/
 MC.PlayState = function() {
-  var i;
+  this.level = 0;
 
-  // load levels
-  this.currentLevel = 1;
+  var that = this;
+  MC.log('that.level=' + that.level);
+  this.Loops = {
+    TitleLoop: { 
+      elapsed: 0,
+      init: function() {
+        var topOffset, leftOffset;
+        $('#text_overlay').empty();
+        $('#text_overlay').attr('style', '');
+        $('#text_overlay').append(MC.levels[that.level].title);
+        $('#text_overlay').css({
+          'font-size': '32pt',
+          'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
+          'color': 'red',
+          'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
+        });
+        topOffset = (MC.HEIGHT - $('#text_overlay').height()) / 2;
+        leftOffset = (MC.WIDTH - $('#text_overlay').width()) / 2;
+        $('#text_overlay').css({
+          'top': topOffset + 'px',
+          'left': leftOffset + 'px'
+        });
+      }
+    },
+    PlayLoop: {
+      elapsed: 0,
+      wave: 0,
+      waveProgress: 0,
+      rateProgress: 0,
+      rateElapsed: 0
+    },
+    EndLoop: { 
+      elapsed: 0,
+      init: function() {
+        var topOffset, leftOffset;
+        $('#text_overlay').empty();
+        $('#text_overlay').attr('style', '');
+        $('#text_overlay').append(MC.levels[that.level].title);
+        $('#text_overlay').css({
+          'font-size': '32pt',
+          'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
+          'color': 'red',
+          'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
+        });
+        topOffset = (MC.HEIGHT - $('#text_overlay').height()) / 2;
+        leftOffset = (MC.WIDTH - $('#text_overlay').width()) / 2;
+        $('#text_overlay').css({
+          'top': topOffset + 'px',
+          'left': leftOffset + 'px'
+        });
+      }
+    }
+  };
 
+  // set up bookkeeping
+  this.currentLoop = this.Loops.TitleLoop;
+  this.currentLoop.init();
 
-  // turn on score
+  // score
   this.score = 0;
   $('#score').show();
+  this.addScore(0);
 };
-
 
 MC.PlayState.prototype.activate = function() {
   MC.log('activating PlayState');
-};
 
+  // add click event handler
+  $("#game_canvas").bind('mousedown', this.onclick);
+};
 
 MC.PlayState.prototype.deactivate = function() {
   MC.log('deactivating PlayState');
-  this.isActive = false;
-  // TODO: hide the title
+  $("#game_canvas").unbind('mousedown', this.onclick);
+  $('#score').hide();
 };
 
-
 MC.PlayState.prototype.onclick = function(evt) {
+  if(this.currentLoop !== this.Loops.PlayLoop) {
+    return false;
+  }
+
+  // handle new missile
   return false;
 };
 
-
 MC.PlayState.prototype.update = function(elapsed) {
-  // TODO: wait for click to go to next state
+  this.currentLoop.elapsed += elapsed;
+  switch(this.currentLoop) {
+    case this.Loops.TitleLoop:
+      // end TitleLoop?
+      if(this.currentLoop.elapsed > MC.TITLE_DURATION) {
+        MC.log('this.level=' + this.level + ': moving from TitleLoop to PlayLoop');
+        this.currentLoop = this.Loops.PlayLoop;
+        this.Loops.PlayLoop.elapsed = 0;
+        this.Loops.TitleLoop.elapsed = 0;
+      }
+      break;
+    case this.Loops.PlayLoop:
+      if(this.currentLoop.elapsed > 5000) {
+        MC.log('this.level=' + this.level + ': moving from PlayLoop to EndLoop');
+        this.currentLoop = this.Loops.EndLoop;
+        this.currentLoop.init();
+        this.Loops.EndLoop.elapsed = 0;
+        this.Loops.PlayLoop.elapsed = 0;
+        this.Loops.PlayLoop.wave = 0;
+        this.Loops.PlayLoop.waveProgress = 0;
+        this.Loops.PlayLoop.rateProgress = 0;
+        this.Loops.PlayLoop.rateElapsed = 0;
+      }
+      break;
+    case this.Loops.EndLoop:
+      // end EndLoop?
+      if(this.currentLoop.elapsed > MC.END_DURATION) {
+        if(this.level >= (MC.levels.length-1)) {
+          // no more levels, pop PlayState, leaves us with title state
+          MC.log('this.level=' + this.level + ', moving from EndLoop to TitleState')
+          MC.stateStack[MC.stateStack.length-1].deactivate();
+          MC.stateStack.pop();
+          MC.stateStack[MC.stateStack.length-1].activate();
+        } else {
+          // move along to next level in PlayState
+          MC.log('this.level=' + this.level + ', moving from EndLoop to TitleLoop');
+          this.level++;
+          this.currentLoop = this.Loops.TitleLoop;
+          this.currentLoop.init();
+          this.Loops.TitleLoop.elapsed = 0;
+          this.Loops.EndLoop.elapsed = 0;
+        }
+      }
+      break;
+  }
+};
+
+MC.PlayState.prototype.addScore = function(points) {
+  this.score += points;
+  $('#score').text('Score: ' + this.score);
 };
 
 
@@ -290,7 +404,6 @@ MC.Ground = function() {
   MC.scene.add(this.mesh);
 };
 
-
 MC.Ground.prototype.removeSelf = function() {
   MC.scene.remove(this.mesh);
 };
@@ -318,7 +431,6 @@ MC.City = function(pos) {
   MC.scene.add(this.mesh);
 };
 
-
 MC.City.prototype.removeSelf = function() {
   MC.scene.remove(this.mesh);
 };
@@ -327,9 +439,26 @@ MC.City.prototype.removeSelf = function() {
 /****************
  * Bases
  ****************/
- MC.Base = function(which) {
+MC.Base = function(which) {
+  if(which == 'left') {
+    this.centerX = 50;
+  } else if(which == 'right') {
+    this.centerX = (MC.CENTER_X * 2) - 50;
+  }
+  this.geometry = new THREE.SphereGeometry(50, 16, 16, 
+    0, Math.PI * 2,
+    0, Math.PI / 2);
+  this.material = new THREE.MeshBasicMaterial({
+    color: 0x2222aa
+  });
+  this.mesh = new THREE.Mesh(this.geometry, this.material);
+  this.mesh.position.set(this.centerX, 0, 0);
+  MC.scene.add(this.mesh);
+};
 
- };
+MC.Base.prototype.removeSelf = function() {
+  MC.scene.remove(this.mesh);
+};
 
 
 /****************
