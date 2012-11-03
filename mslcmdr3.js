@@ -1,6 +1,17 @@
 // the MslCmdr namespace
 var MC = { };
 
+// for clearing the scene
+THREE.Object3D.prototype.clear = function(){
+    var children = this.children;
+    for(var i = children.length-1;i>=0;i--){
+        var child = children[i];
+        child.clear();
+        this.remove(child);
+    };
+};
+
+
 $(document).ready(function() {
   var i;
 
@@ -45,7 +56,7 @@ $(document).ready(function() {
     url: 'level_desc.json',
     dataType: 'text',
     async: false
-  }).done(function(resp) { 
+  }).done(function(resp) {
     MC.levels = JSON.parse(resp).levels;
   });
 
@@ -99,7 +110,7 @@ MC.update = function() {
     MC.stats.update();
     requestAnimationFrame(MC.update);
   } else {
-      RC.log("ERROR: no more states :(");
+    MC.log("ERROR: no more states :(");
   }
 };
 
@@ -117,15 +128,16 @@ MC.debug = function(msg, val1, val2, val3) {
  * TitleState
  ****************/
 MC.TitleState = function() {
-  this.isActive = false;
 };
 
 MC.TitleState.prototype.activate = function() {
-  var i, topOffset, leftOffset;
+  var i, topOffset, leftOffset, children;
 
   MC.log('activating TitleState');
   $('#score').hide();
 
+  // set up the scene
+  // MC.scene.clear();
   MC.ground = new MC.Ground();
   MC.cities = new Array(5);
   for(i = 0; i < 5; i++) {
@@ -201,14 +213,15 @@ MC.TitleState.prototype.activate = function() {
   });
 
   // add click event handler, disable text selector
-  $("#game_canvas").bind('mousedown', this.onclick);
+  $("#game_container").bind('mousedown', this.onclick);
   $('#text_overlay').find('*').css('cursor', 'default');
 };
 
 MC.TitleState.prototype.deactivate = function() {
   MC.log('deactivating TitleState');
   $('#text_overlay').hide();
-  $("#game_canvas").unbind('mousedown', this.onclick);
+  $('#text_overlay').empty();
+  $("#game_container").unbind('mousedown', this.onclick);
 };
 
 MC.TitleState.prototype.onclick = function(evt) {
@@ -227,18 +240,18 @@ MC.TitleState.prototype.update = function(elapsed) {
  * PlayState
  ****************/
 MC.PlayState = function() {
+  var state = this;
   this.level = 0;
 
-  var that = this;
-  MC.log('that.level=' + that.level);
+  MC.log('state.level=' + state.level);
   this.Loops = {
-    TitleLoop: { 
+    TitleLoop: {
       elapsed: 0,
       init: function() {
         var topOffset, leftOffset;
         $('#text_overlay').empty();
         $('#text_overlay').attr('style', '');
-        $('#text_overlay').append(MC.levels[that.level].title);
+        $('#text_overlay').append(MC.levels[state.level].title);
         $('#text_overlay').css({
           'font-size': '32pt',
           'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
@@ -251,6 +264,7 @@ MC.PlayState = function() {
           'top': topOffset + 'px',
           'left': leftOffset + 'px'
         });
+        $('#text_overlay').find('*').css('cursor', 'default');
       }
     },
     PlayLoop: {
@@ -258,15 +272,18 @@ MC.PlayState = function() {
       wave: 0,
       waveProgress: 0,
       rateProgress: 0,
-      rateElapsed: 0
+      rateElapsed: 0,
+      init: function() {
+        $('#text_overlay').empty();
+      }
     },
-    EndLoop: { 
+    EndLoop: {
       elapsed: 0,
       init: function() {
         var topOffset, leftOffset;
         $('#text_overlay').empty();
         $('#text_overlay').attr('style', '');
-        $('#text_overlay').append(MC.levels[that.level].title);
+        $('#text_overlay').append(MC.levels[state.level].end_text);
         $('#text_overlay').css({
           'font-size': '32pt',
           'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
@@ -279,6 +296,7 @@ MC.PlayState = function() {
           'top': topOffset + 'px',
           'left': leftOffset + 'px'
         });
+        $('#text_overlay').find('*').css('cursor', 'default');
       }
     }
   };
@@ -307,8 +325,19 @@ MC.PlayState.prototype.deactivate = function() {
 };
 
 MC.PlayState.prototype.onclick = function(evt) {
-  if(this.currentLoop !== this.Loops.PlayLoop) {
-    return false;
+  var state = MC.stateStack[MC.stateStack.length-1];
+
+  switch(state.currentLoop) {
+    case state.Loops.TitleLoop:
+      state.setLoop(state.Loops.PlayLoop);
+      break;
+    case state.Loops.PlayLoop:
+      // handle new missile
+      break;
+    case state.Loops.EndLoop:
+      // handle new missile
+      break;
+
   }
 
   // handle new missile
@@ -321,23 +350,12 @@ MC.PlayState.prototype.update = function(elapsed) {
     case this.Loops.TitleLoop:
       // end TitleLoop?
       if(this.currentLoop.elapsed > MC.TITLE_DURATION) {
-        MC.log('this.level=' + this.level + ': moving from TitleLoop to PlayLoop');
-        this.currentLoop = this.Loops.PlayLoop;
-        this.Loops.PlayLoop.elapsed = 0;
-        this.Loops.TitleLoop.elapsed = 0;
+        this.setLoop(this.Loops.PlayLoop);
       }
       break;
     case this.Loops.PlayLoop:
       if(this.currentLoop.elapsed > 5000) {
-        MC.log('this.level=' + this.level + ': moving from PlayLoop to EndLoop');
-        this.currentLoop = this.Loops.EndLoop;
-        this.currentLoop.init();
-        this.Loops.EndLoop.elapsed = 0;
-        this.Loops.PlayLoop.elapsed = 0;
-        this.Loops.PlayLoop.wave = 0;
-        this.Loops.PlayLoop.waveProgress = 0;
-        this.Loops.PlayLoop.rateProgress = 0;
-        this.Loops.PlayLoop.rateElapsed = 0;
+        this.setLoop(this.Loops.EndLoop);
       }
       break;
     case this.Loops.EndLoop:
@@ -345,18 +363,13 @@ MC.PlayState.prototype.update = function(elapsed) {
       if(this.currentLoop.elapsed > MC.END_DURATION) {
         if(this.level >= (MC.levels.length-1)) {
           // no more levels, pop PlayState, leaves us with title state
-          MC.log('this.level=' + this.level + ', moving from EndLoop to TitleState')
           MC.stateStack[MC.stateStack.length-1].deactivate();
           MC.stateStack.pop();
           MC.stateStack[MC.stateStack.length-1].activate();
         } else {
           // move along to next level in PlayState
-          MC.log('this.level=' + this.level + ', moving from EndLoop to TitleLoop');
           this.level++;
-          this.currentLoop = this.Loops.TitleLoop;
-          this.currentLoop.init();
-          this.Loops.TitleLoop.elapsed = 0;
-          this.Loops.EndLoop.elapsed = 0;
+          this.setLoop(this.Loops.TitleLoop);
         }
       }
       break;
@@ -367,6 +380,26 @@ MC.PlayState.prototype.addScore = function(points) {
   this.score += points;
   $('#score').text('Score: ' + this.score);
 };
+
+MC.PlayState.prototype.setLoop = function(loop) {
+  // reset properties
+  for(var key in this.Loops) {
+    if(this.Loops.hasOwnProperty(key)) {
+      var obj = this.Loops[key];
+      for(var prop in obj) {
+        if(obj.hasOwnProperty(prop)) {
+          if(typeof(obj[prop]) == "number") {
+            obj[prop] = 0;
+          }
+        }
+      }
+    }
+  }
+  // set current loop
+  this.currentLoop = loop;
+  this.currentLoop.init();
+};
+
 
 
 /****************
@@ -445,7 +478,7 @@ MC.Base = function(which) {
   } else if(which == 'right') {
     this.centerX = (MC.CENTER_X * 2) - 50;
   }
-  this.geometry = new THREE.SphereGeometry(50, 16, 16, 
+  this.geometry = new THREE.SphereGeometry(50, 16, 16,
     0, Math.PI * 2,
     0, Math.PI / 2);
   this.material = new THREE.MeshBasicMaterial({
