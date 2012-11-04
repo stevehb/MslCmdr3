@@ -23,6 +23,9 @@ $(document).ready(function() {
   MC.CAMERA_LOOK_AT = new THREE.Vector3(MC.CENTER_X, 200, -200);
   MC.TITLE_DURATION = 3000;
   MC.END_DURATION = 5000;
+  MC.BASE_HEIGHT = 50;
+  MC.CITY_HEIGHT = 100;
+  MC.PLAYER_MISSILE_SPEED = 5;
 
   // set up three.js basics
   MC.log('setting up three.js basics');
@@ -46,15 +49,6 @@ $(document).ready(function() {
   MC.stateStack = new Array();
   MC.stateStack.push(new MC.TitleState());
   MC.stateStack[MC.stateStack.length-1].activate();
-
-  // grab the level descriptions
-  $.ajax({
-    url: 'level_desc.json',
-    dataType: 'text',
-    async: false
-  }).done(function(resp) {
-    MC.levels = JSON.parse(resp).levels;
-  });
 
   // DEBUG: add mousemove scene scrolling
   // add to game_container so that scroll works with overlays
@@ -91,7 +85,7 @@ MC.update = function() {
   }
   if(MC.keyboard.pressed('a')) {
     MC.camera.position.x -= 5;
-  } 
+  }
   if(MC.keyboard.pressed('d')) {
     MC.camera.position.x += 5;
   }
@@ -114,6 +108,14 @@ MC.update = function() {
     MC.log("ERROR: no more states :(");
   }
 };
+
+MC.getCanvasCoords = function(evt) {
+  var bb = $("#game_canvas")[0].getBoundingClientRect();
+  return {
+    x: (evt.clientX - bb.left),
+    y: (evt.clientY - bb.top)
+  };
+}
 
 MC.log = function(msg) {
   console.log('MC: ' + msg);
@@ -244,20 +246,44 @@ MC.TitleState.prototype.update = function(elapsed) {
  ****************/
 MC.PlayState = function() {
   var state = this;
+
+  // grab the level descriptions
+  $.ajax({
+    url: 'level_desc.json',
+    dataType: 'text',
+    async: false
+  }).done(function(resp) {
+    state.levels = JSON.parse(resp).levels;
+  });
   this.level = 0;
 
+  // for transforming 2d click to 3d position
+  this.projector = new THREE.Projector();
+  this.mouse2d = new THREE.Vector3(0, 0, 0.5);
+  this.mouse3d = new THREE.Vector3();
+
   // set up the play scene
+  MC.missiles = new Array();
   MC.scene.clear();
   MC.ground = new MC.Ground();
   MC.cities = new Array(5);
   for(i = 0; i < 5; i++) {
     MC.cities[i] = new MC.City(i);
   }
-  MC.bases = new Array();
-  MC.bases.push(new MC.Base('left'));
-  MC.bases.push(new MC.Base('right'));
+  MC.bases = {
+    left: new MC.Base('left'),
+    right: new MC.Base('right')
+  };
   MC.ambientLight = new THREE.AmbientLight(0xaaaaaa);
   MC.scene.add(MC.ambientLight);
+
+  // picking plane is used for click detection
+  this.pickingPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(MC.CENTER_X * 2, 2000),
+    new THREE.MeshBasicMaterial({ wireframe: true, color: 0x000000, opacity: 0.0 }));
+  this.pickingPlane.translateX(MC.CENTER_X);
+  this.pickingPlane.translateY(500);
+  MC.scene.add(this.pickingPlane);
 
   MC.log('state.level=' + state.level);
   this.Loops = {
@@ -267,7 +293,7 @@ MC.PlayState = function() {
         var topOffset, leftOffset;
         $('#text_overlay').empty();
         $('#text_overlay').attr('style', '');
-        $('#text_overlay').append(MC.levels[state.level].title);
+        $('#text_overlay').append(state.levels[state.level].title);
         $('#text_overlay').css({
           'font-size': '32pt',
           'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
@@ -299,7 +325,7 @@ MC.PlayState = function() {
         var topOffset, leftOffset;
         $('#text_overlay').empty();
         $('#text_overlay').attr('style', '');
-        $('#text_overlay').append(MC.levels[state.level].end_text);
+        $('#text_overlay').append(state.levels[state.level].end_text);
         $('#text_overlay').css({
           'font-size': '32pt',
           'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
@@ -343,12 +369,36 @@ MC.PlayState.prototype.deactivate = function() {
 
 MC.PlayState.prototype.onclick = function(evt) {
   var state = MC.stateStack[MC.stateStack.length-1];
+  var i, ray, click, intersectors, mslDest, mslAdded, opts, side;
   switch(state.currentLoop) {
     case state.Loops.TitleLoop:
       state.setCurrentLoop(state.Loops.PlayLoop);
       break;
     case state.Loops.PlayLoop:
-      // handle new missile
+      // calc world space coord of mouse click
+      click = MC.getCanvasCoords(evt);
+      state.mouse2d.setX(((click.x / MC.WIDTH) * 2) - 1);
+      state.mouse2d.setY(((click.y / MC.HEIGHT) * -2) + 1);
+      ray = state.projector.pickingRay(state.mouse2d.clone(), MC.camera);
+      intersectors = ray.intersectObject(state.pickingPlane);
+
+      // if use clicked over the battlefield, then add a missile
+      if(intersectors.length > 0) {
+        mslDest = intersectors[0].point;
+        side = (evt.which == 1) ? 'left' : 'right';
+        opts = { team: 'player', type: 'icbm', side: side, dest: mslDest };
+        // recycle old missile if possible, otherwise create a new one
+        mslAdded = false;
+        for(i = 0; i < MC.missiles.length; i++) {
+          if(!MC.missiles[i].active) {
+            MC.missiles[i].reset(opts);
+            mslAdded = true;
+          }
+        }
+        if(!mslAdded) {
+          MC.missiles.push(new MC.Missile(opts));
+        }
+      }
       break;
     case state.Loops.EndLoop:
       state.currentLoop.elapsed = MC.END_DURATION + 1;
@@ -359,6 +409,7 @@ MC.PlayState.prototype.onclick = function(evt) {
 };
 
 MC.PlayState.prototype.update = function(elapsed) {
+  var i;
   this.currentLoop.elapsed += elapsed;
   switch(this.currentLoop) {
     case this.Loops.TitleLoop:
@@ -368,14 +419,14 @@ MC.PlayState.prototype.update = function(elapsed) {
       }
       break;
     case this.Loops.PlayLoop:
-      if(this.currentLoop.elapsed > 5000) {
-        this.setCurrentLoop(this.Loops.EndLoop);
+      for(i = 0; i < MC.missiles.length; i++) {
+        MC.missiles[i].update(elapsed);
       }
       break;
     case this.Loops.EndLoop:
       // end EndLoop?
       if(this.currentLoop.elapsed > MC.END_DURATION) {
-        if(this.level >= (MC.levels.length-1)) {
+        if(this.level >= (this.levels.length-1)) {
           // no more levels, pop PlayState, leaves us with title state
           MC.stateStack[MC.stateStack.length-1].deactivate();
           MC.stateStack.pop();
@@ -472,9 +523,9 @@ MC.City = function(pos) {
   });
 
   this.centerX = 300 + (200 * pos);
-  this.geometry = new THREE.CubeGeometry(50, 100, 50);
+  this.geometry = new THREE.CubeGeometry(50, MC.CITY_HEIGHT, 50);
   this.mesh = new THREE.Mesh(this.geometry, this.material);
-  this.mesh.position.set(this.centerX, 50, 0);
+  this.mesh.position.set(this.centerX, MC.CITY_HEIGHT / 2, 0);
   MC.scene.add(this.mesh);
 };
 
@@ -488,11 +539,11 @@ MC.City.prototype.removeSelf = function() {
  ****************/
 MC.Base = function(which) {
   if(which == 'left') {
-    this.centerX = 50;
+    this.centerX = MC.BASE_HEIGHT;
   } else if(which == 'right') {
-    this.centerX = (MC.CENTER_X * 2) - 50;
+    this.centerX = (MC.CENTER_X * 2) - MC.BASE_HEIGHT;
   }
-  this.geometry = new THREE.SphereGeometry(50, 16, 16,
+  this.geometry = new THREE.SphereGeometry(MC.BASE_HEIGHT, 16, 16,
     0, Math.PI * 2,
     0, Math.PI / 2);
   this.material = new THREE.MeshBasicMaterial({
@@ -511,8 +562,66 @@ MC.Base.prototype.removeSelf = function() {
 /****************
  * Missiles
  ****************/
+MC.Missile = function(opts) {
+  this.reset(opts);
+};
 
+MC.Missile.prototype.reset = function(opts) {
+  var idx, color, distX, distY;
+  // live=true: missile; live=false: explosion;
+  this.live = true;
 
-/****************
- * Explosions
- ****************/
+  // active=true: in play; active=false: spot available
+  this.active = true;
+
+  // team=<player || enemy>
+  this.team = opts.team;
+
+  // type=<icbm || cluster || smart>
+  this.type = opts.type || 'icbm';
+
+  if(this.team == 'player') {
+    this.src = new THREE.Vector3(MC.bases[opts.side].centerX, MC.BASE_HEIGHT, 0);
+    this.dest = new THREE.Vector3(opts.dest.x, opts.dest.y, 0);
+    this.speed = MC.PLAYER_MISSILE_SPEED;
+    color = 0x1197ff;
+  } else if(this.team == 'enemy') {
+    idx = Math.floor(Math.random() * 5);
+    this.src = new THREE.Vector3(Math.random() * (MC.CENTER_X * 2), 500, 0);
+    this.dest = new THREE.Vector3(MC.cities[idx].centerX, MC.CITY_HEIGHT / 2, 0);
+    this.speed = opts.speed;
+    color = 0xff4900;
+  }
+
+  // calculate sine/cosine for updates
+  distX = this.dest.x - this.src.x;
+  distY = this.dest.y - this.src.y;
+  this.totalDist = this.src.distanceTo(this.dest);
+  this.cosine = distX / this.totalDist;
+  this.sine = distY / this.totalDist;
+
+  this.pos = new THREE.Vector3(this.src.x, this.src.y, 0);
+  this.geometry = new THREE.Geometry();
+  this.geometry.vertices.push(new THREE.Vector3(this.src.x, this.src.y, 0));
+  this.geometry.vertices.push(new THREE.Vector3(this.dest.x, this.dest.y, 0));
+  this.material = new THREE.LineBasicMaterial({ color: color, linewidth: 4 });
+  this.mesh = new THREE.Line(this.geometry, this.material);
+  MC.scene.add(this.mesh);
+};
+
+MC.Missile.prototype.update = function(elapsed) {
+  var newX, newY;
+  newX = this.speed * elapsed * this.cosine;
+  newY = this.speed * elapsed * this.sine;
+
+  this.pos.set(newX, newY, 0);
+  //this.geometry.vertices.push(this.pos.clone());
+
+  if(this.src.distanceTo(this.dest) > this.totalDist) {
+    MC.log('missile done');
+  }
+};
+
+MC.Base.prototype.removeSelf = function() {
+  MC.scene.remove(this.mesh);
+};
