@@ -36,10 +36,6 @@ $(document).ready(function() {
   $(MC.renderer.domElement).attr('id', 'game_canvas');
   $('#game_container').append(MC.renderer.domElement);
 
-  // add lighting
-  MC.ambientLight = new THREE.AmbientLight(0xdddddd);
-  MC.scene.add(MC.ambientLight);
-
   // set up extensions: stats counter, keyboard state, click handlers
   MC.log('adding stats counter');
   MC.stats = new Stats();
@@ -89,15 +85,20 @@ MC.update = function() {
   // DEBUG cam movement
   if(MC.keyboard.pressed('w')) {
     MC.camera.position.z -= 5;
-  } else if(MC.keyboard.pressed('s')) {
+  }
+  if(MC.keyboard.pressed('s')) {
     MC.camera.position.z += 5;
-  } else if(MC.keyboard.pressed('a')) {
+  }
+  if(MC.keyboard.pressed('a')) {
     MC.camera.position.x -= 5;
-  } else if(MC.keyboard.pressed('d')) {
+  } 
+  if(MC.keyboard.pressed('d')) {
     MC.camera.position.x += 5;
-  } else if(MC.keyboard.pressed('up')) {
+  }
+  if(MC.keyboard.pressed('up')) {
     MC.camera.position.y += 5;
-  } else if(MC.keyboard.pressed('down')) {
+  }
+  if(MC.keyboard.pressed('down')) {
     MC.camera.position.y -= 5;
   }
   MC.debug('cam.pos=', MC.camera.position.x, MC.camera.position.y, MC.camera.position.z);
@@ -136,8 +137,8 @@ MC.TitleState.prototype.activate = function() {
   MC.log('activating TitleState');
   $('#score').hide();
 
-  // set up the scene
-  // MC.scene.clear();
+  // set up the demo scene
+  MC.scene.clear();
   MC.ground = new MC.Ground();
   MC.cities = new Array(5);
   for(i = 0; i < 5; i++) {
@@ -146,6 +147,8 @@ MC.TitleState.prototype.activate = function() {
   MC.bases = new Array();
   MC.bases.push(new MC.Base('left'));
   MC.bases.push(new MC.Base('right'));
+  MC.ambientLight = new THREE.AmbientLight(0xaaaaaa);
+  MC.scene.add(MC.ambientLight);
 
   // create the title spans
   $('#text_overlay').empty();
@@ -243,6 +246,19 @@ MC.PlayState = function() {
   var state = this;
   this.level = 0;
 
+  // set up the play scene
+  MC.scene.clear();
+  MC.ground = new MC.Ground();
+  MC.cities = new Array(5);
+  for(i = 0; i < 5; i++) {
+    MC.cities[i] = new MC.City(i);
+  }
+  MC.bases = new Array();
+  MC.bases.push(new MC.Base('left'));
+  MC.bases.push(new MC.Base('right'));
+  MC.ambientLight = new THREE.AmbientLight(0xaaaaaa);
+  MC.scene.add(MC.ambientLight);
+
   MC.log('state.level=' + state.level);
   this.Loops = {
     TitleLoop: {
@@ -305,10 +321,11 @@ MC.PlayState = function() {
   this.currentLoop = this.Loops.TitleLoop;
   this.currentLoop.init();
 
-  // score
+  // score, missiles, explosions
   this.score = 0;
   $('#score').show();
   this.addScore(0);
+
 };
 
 MC.PlayState.prototype.activate = function() {
@@ -326,21 +343,18 @@ MC.PlayState.prototype.deactivate = function() {
 
 MC.PlayState.prototype.onclick = function(evt) {
   var state = MC.stateStack[MC.stateStack.length-1];
-
   switch(state.currentLoop) {
     case state.Loops.TitleLoop:
-      state.setLoop(state.Loops.PlayLoop);
+      state.setCurrentLoop(state.Loops.PlayLoop);
       break;
     case state.Loops.PlayLoop:
       // handle new missile
       break;
     case state.Loops.EndLoop:
-      // handle new missile
+      state.currentLoop.elapsed = MC.END_DURATION + 1;
       break;
-
   }
 
-  // handle new missile
   return false;
 };
 
@@ -350,12 +364,12 @@ MC.PlayState.prototype.update = function(elapsed) {
     case this.Loops.TitleLoop:
       // end TitleLoop?
       if(this.currentLoop.elapsed > MC.TITLE_DURATION) {
-        this.setLoop(this.Loops.PlayLoop);
+        this.setCurrentLoop(this.Loops.PlayLoop);
       }
       break;
     case this.Loops.PlayLoop:
       if(this.currentLoop.elapsed > 5000) {
-        this.setLoop(this.Loops.EndLoop);
+        this.setCurrentLoop(this.Loops.EndLoop);
       }
       break;
     case this.Loops.EndLoop:
@@ -369,7 +383,7 @@ MC.PlayState.prototype.update = function(elapsed) {
         } else {
           // move along to next level in PlayState
           this.level++;
-          this.setLoop(this.Loops.TitleLoop);
+          this.setCurrentLoop(this.Loops.TitleLoop);
         }
       }
       break;
@@ -381,7 +395,7 @@ MC.PlayState.prototype.addScore = function(points) {
   $('#score').text('Score: ' + this.score);
 };
 
-MC.PlayState.prototype.setLoop = function(loop) {
+MC.PlayState.prototype.setCurrentLoop = function(loop) {
   // reset properties
   for(var key in this.Loops) {
     if(this.Loops.hasOwnProperty(key)) {

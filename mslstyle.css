@@ -19,12 +19,12 @@ div {
 .title {
   margin: 0 auto;
   width: 25%;
-  height: 75px;
-  line-height: 75px;
+  height: 30;
+  line-height: 30px;
   text-align: center;
-  font-size: 18pt;
-  font-weight: bold;
-  color: gray;
+  font-size: 14pt;
+  font-weight: lighter;
+  color: #ff7400;
 }
 
 .game_container {
