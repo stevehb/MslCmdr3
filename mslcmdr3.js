@@ -15,9 +15,20 @@ THREE.Object3D.prototype.clear = function(){
 $(document).ready(function() {
   var i;
 
+  // grab settings
+  $.ajax({
+    url: 'settings.json',
+    dataType: 'text',
+    async: false
+  }).done(function(resp) {
+    MC.settings = JSON.parse(resp).settings;
+  });
+  this.level = 0;
+
+
   // constants
-  MC.WIDTH = $('#game_container').width();
-  MC.HEIGHT = $('#game_container').height();
+  MC.SCREEN_WIDTH = $('#game_container').width();
+  MC.SCREEN_HEIGHT = $('#game_container').height();
   MC.CENTER_X = 700;
   MC.CAMERA_ORIGIN = new THREE.Vector3(MC.CENTER_X, 350, 800);
   MC.CAMERA_LOOK_AT = new THREE.Vector3(MC.CENTER_X, 200, -200);
@@ -30,11 +41,11 @@ $(document).ready(function() {
   // set up three.js basics
   MC.log('setting up three.js basics');
   MC.scene = new THREE.Scene();
-  MC.camera = new THREE.PerspectiveCamera(55, MC.WIDTH / MC.HEIGHT, 1, 10000);
+  MC.camera = new THREE.PerspectiveCamera(55, MC.SCREEN_WIDTH / MC.SCREEN_HEIGHT, 1, 10000);
   MC.renderer = new THREE.WebGLRenderer({ antialias: true });
   MC.camera.position.copy(MC.CAMERA_ORIGIN);
   MC.camera.lookAt(MC.CAMERA_LOOK_AT);
-  MC.renderer.setSize(MC.WIDTH, MC.HEIGHT);
+  MC.renderer.setSize(MC.SCREEN_WIDTH, MC.SCREEN_HEIGHT);
   MC.renderer.setClearColorHex(0x111111, 1.0);
   $(MC.renderer.domElement).attr('id', 'game_canvas');
   $('#game_container').append(MC.renderer.domElement);
@@ -56,8 +67,8 @@ $(document).ready(function() {
     var rect = MC.renderer.domElement.getBoundingClientRect();
     var x = evt.clientX - rect.left;
     var y = evt.clientY - rect.top;
-    var pctX = (x - (MC.WIDTH / 2)) / (MC.WIDTH / 2);
-    var pctY = (y - (MC.HEIGHT / 2)) / (MC.HEIGHT / 2);
+    var pctX = (x - (MC.SCREEN_WIDTH / 2)) / (MC.SCREEN_WIDTH / 2);
+    var pctY = (y - (MC.SCREEN_HEIGHT / 2)) / (MC.SCREEN_HEIGHT / 2);
     var camOffsetX = pctX * 50;
     var camOffsetY = pctY * 20;
     MC.camera.position.set(camOffsetX, camOffsetY, 0);
@@ -198,8 +209,8 @@ MC.TitleState.prototype.activate = function() {
   });
 
   // set title position
-  topOffset = (MC.HEIGHT - $('#text_overlay').height()) / 2;
-  leftOffset = (MC.WIDTH - $('#text_overlay').width()) / 2;
+  topOffset = (MC.SCREEN_HEIGHT - $('#text_overlay').height()) / 2;
+  leftOffset = (MC.SCREEN_WIDTH - $('#text_overlay').width()) / 2;
   $('#text_overlay').css({
     'top': topOffset + 'px',
     'left': leftOffset + 'px'
@@ -300,8 +311,8 @@ MC.PlayState = function() {
           'color': 'red',
           'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
         });
-        topOffset = (MC.HEIGHT - $('#text_overlay').height()) / 2;
-        leftOffset = (MC.WIDTH - $('#text_overlay').width()) / 2;
+        topOffset = (MC.SCREEN_HEIGHT - $('#text_overlay').height()) / 2;
+        leftOffset = (MC.SCREEN_WIDTH - $('#text_overlay').width()) / 2;
         $('#text_overlay').css({
           'top': topOffset + 'px',
           'left': leftOffset + 'px'
@@ -332,8 +343,8 @@ MC.PlayState = function() {
           'color': 'red',
           'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
         });
-        topOffset = (MC.HEIGHT - $('#text_overlay').height()) / 2;
-        leftOffset = (MC.WIDTH - $('#text_overlay').width()) / 2;
+        topOffset = (MC.SCREEN_HEIGHT - $('#text_overlay').height()) / 2;
+        leftOffset = (MC.SCREEN_WIDTH - $('#text_overlay').width()) / 2;
         $('#text_overlay').css({
           'top': topOffset + 'px',
           'left': leftOffset + 'px'
@@ -369,30 +380,41 @@ MC.PlayState.prototype.deactivate = function() {
 
 MC.PlayState.prototype.onclick = function(evt) {
   var state = MC.stateStack[MC.stateStack.length-1];
-  var i, ray, click, intersectors, mslDest, mslAdded, opts, side;
+  var i;
   switch(state.currentLoop) {
     case state.Loops.TitleLoop:
       state.setCurrentLoop(state.Loops.PlayLoop);
       break;
     case state.Loops.PlayLoop:
       // calc world space coord of mouse click
-      click = MC.getCanvasCoords(evt);
-      state.mouse2d.setX(((click.x / MC.WIDTH) * 2) - 1);
-      state.mouse2d.setY(((click.y / MC.HEIGHT) * -2) + 1);
-      ray = state.projector.pickingRay(state.mouse2d.clone(), MC.camera);
-      intersectors = ray.intersectObject(state.pickingPlane);
+      var click = MC.getCanvasCoords(evt);
+      state.mouse2d.setX(((click.x / MC.SCREEN_WIDTH) * 2) - 1);
+      state.mouse2d.setY(((click.y / MC.SCREEN_HEIGHT) * -2) + 1);
+      var ray = state.projector.pickingRay(state.mouse2d.clone(), MC.camera);
+      var intersectors = ray.intersectObject(state.pickingPlane);
 
       // if use clicked over the battlefield, then add a missile
+      var mslDest, inBattlefield = false;
       if(intersectors.length > 0) {
         mslDest = intersectors[0].point;
-        side = (evt.which == 1) ? 'left' : 'right';
-        opts = { team: 'player', type: 'icbm', side: side, dest: mslDest };
+      }
+      inBattlefield = 
+        mslDest != undefined && 
+        mslDest.x >= 0 &&
+        mslDest.x <= (MC.CENTER_X * 2) &&
+        mslDest.y >= MC.CITY_HEIGHT;
+      
+      // if destination is in battlefield, launch a missile 
+      if(inBattlefield) {
+        var side = (evt.which == 1) ? 'left' : 'right';
+        var opts = { team: 'player', type: 'icbm', side: side, dest: mslDest };
         // recycle old missile if possible, otherwise create a new one
-        mslAdded = false;
+        var mslAdded = false;
         for(i = 0; i < MC.missiles.length; i++) {
           if(!MC.missiles[i].active) {
             MC.missiles[i].reset(opts);
             mslAdded = true;
+            break;
           }
         }
         if(!mslAdded) {
@@ -568,17 +590,11 @@ MC.Missile = function(opts) {
 
 MC.Missile.prototype.reset = function(opts) {
   var idx, color, distX, distY;
-  // live=true: missile; live=false: explosion;
-  this.live = true;
 
-  // active=true: in play; active=false: spot available
-  this.active = true;
-
-  // team=<player || enemy>
-  this.team = opts.team;
-
-  // type=<icbm || cluster || smart>
-  this.type = opts.type || 'icbm';
+  this.active = true;               // active=true: in play; active=false: spot avail;
+  this.live = true;                 // live=true: missile; live=false: explosion;
+  this.team = opts.team;            // team=<'player' || 'enemy'>
+  this.type = opts.type || 'icbm';  // type=<'icbm' || 'cluster' || 'smart'>
 
   if(this.team == 'player') {
     this.src = new THREE.Vector3(MC.bases[opts.side].centerX, MC.BASE_HEIGHT, 0);
@@ -603,25 +619,43 @@ MC.Missile.prototype.reset = function(opts) {
   this.pos = new THREE.Vector3(this.src.x, this.src.y, 0);
   this.geometry = new THREE.Geometry();
   this.geometry.vertices.push(new THREE.Vector3(this.src.x, this.src.y, 0));
-  this.geometry.vertices.push(new THREE.Vector3(this.dest.x, this.dest.y, 0));
-  this.material = new THREE.LineBasicMaterial({ color: color, linewidth: 4 });
+  this.geometry.vertices.push(new THREE.Vector3(this.src.x, this.src.y, 0));
+  this.geometry.dynamic = true;
+  this.material = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
   this.mesh = new THREE.Line(this.geometry, this.material);
   MC.scene.add(this.mesh);
 };
 
 MC.Missile.prototype.update = function(elapsed) {
-  var newX, newY;
-  newX = this.speed * elapsed * this.cosine;
-  newY = this.speed * elapsed * this.sine;
-
-  this.pos.set(newX, newY, 0);
-  //this.geometry.vertices.push(this.pos.clone());
-
-  if(this.src.distanceTo(this.dest) > this.totalDist) {
-    MC.log('missile done');
+  if(!this.active) {
+    return;
   }
+
+  // missile state
+  if(this.live) {
+    // update the missile position
+    this.pos.x += this.speed * elapsed * this.cosine;
+    this.pos.y += this.speed * elapsed * this.sine;
+    this.geometry.vertices[this.geometry.vertices.length-1].copy(this.pos);
+    this.geometry.verticesNeedUpdate = true;  
+    // explode if missile reached destination
+    if(this.src.distanceTo(this.pos) > this.totalDist) {
+      this.live = false;
+      this.removeSelf();
+      this.geometry = new THREE.SphereGeometry(2, 16, 16);
+      this.material = new THREE.MeshBasicMaterial({ color: 0xa62f00 });
+      this.mesh = new THREE.Mesh(this.geometry, this.material);
+      MC.scene.add(this.mesh);
+    }
+  }
+
+  // explosion state
+  if(!this.live) {
+    
+  }
+
 };
 
-MC.Base.prototype.removeSelf = function() {
+MC.Missile.prototype.removeSelf = function() {
   MC.scene.remove(this.mesh);
 };
