@@ -13,15 +13,14 @@
 
     "city_width": 50,
     "city_height": 100,
-    "city_depth": 50,     
+    "city_depth": 50,
 
     "base_height": 50,
     "base_radius": 50,
 
-    "player_missile_speed": 0.1,
+    "player_missile_speed": 1.0,
 
-    "explosion_start_radius": 10,
-    "explosion_end_radius": 100,
+    "explosion_radius": 70,
     "explosion_duration": 1500,
     "explosion_color": "0xa62f00",
 
