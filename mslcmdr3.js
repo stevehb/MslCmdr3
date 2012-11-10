@@ -22,30 +22,23 @@ $(document).ready(function() {
     async: false
   }).done(function(resp) {
     MC.settings = JSON.parse(resp).settings;
+    MC.settings.screen_width = $('#game_container').width();
+    MC.settings.screen_height = $('#game_container').height();
   });
   this.level = 0;
 
-
-  // constants
-  MC.SCREEN_WIDTH = $('#game_container').width();
-  MC.SCREEN_HEIGHT = $('#game_container').height();
-  MC.CENTER_X = 700;
-  MC.CAMERA_ORIGIN = new THREE.Vector3(MC.CENTER_X, 350, 800);
-  MC.CAMERA_LOOK_AT = new THREE.Vector3(MC.CENTER_X, 200, -200);
-  MC.TITLE_DURATION = 3000;
-  MC.END_DURATION = 5000;
-  MC.BASE_HEIGHT = 50;
-  MC.CITY_HEIGHT = 100;
-  MC.PLAYER_MISSILE_SPEED = 5;
+  // program constants
+  MC.camera_origin = new THREE.Vector3(MC.settings.world_center_x, 350, 800);
+  MC.camera_look_at = new THREE.Vector3(MC.settings.world_center_x, 200, -200);
 
   // set up three.js basics
   MC.log('setting up three.js basics');
   MC.scene = new THREE.Scene();
-  MC.camera = new THREE.PerspectiveCamera(55, MC.SCREEN_WIDTH / MC.SCREEN_HEIGHT, 1, 10000);
+  MC.camera = new THREE.PerspectiveCamera(55, MC.settings.screen_width / MC.settings.screen_height, 1, 10000);
   MC.renderer = new THREE.WebGLRenderer({ antialias: true });
-  MC.camera.position.copy(MC.CAMERA_ORIGIN);
-  MC.camera.lookAt(MC.CAMERA_LOOK_AT);
-  MC.renderer.setSize(MC.SCREEN_WIDTH, MC.SCREEN_HEIGHT);
+  MC.camera.position.copy(MC.camera_origin);
+  MC.camera.lookAt(MC.camera_look_at);
+  MC.renderer.setSize(MC.settings.screen_width, MC.settings.screen_height);
   MC.renderer.setClearColorHex(0x111111, 1.0);
   $(MC.renderer.domElement).attr('id', 'game_canvas');
   $('#game_container').append(MC.renderer.domElement);
@@ -67,13 +60,13 @@ $(document).ready(function() {
     var rect = MC.renderer.domElement.getBoundingClientRect();
     var x = evt.clientX - rect.left;
     var y = evt.clientY - rect.top;
-    var pctX = (x - (MC.SCREEN_WIDTH / 2)) / (MC.SCREEN_WIDTH / 2);
-    var pctY = (y - (MC.SCREEN_HEIGHT / 2)) / (MC.SCREEN_HEIGHT / 2);
+    var pctX = (x - (MC.settings.screen_width / 2)) / (MC.settings.screen_width / 2);
+    var pctY = (y - (MC.settings.screen_height / 2)) / (MC.settings.screen_height / 2);
     var camOffsetX = pctX * 50;
     var camOffsetY = pctY * 20;
     MC.camera.position.set(camOffsetX, camOffsetY, 0);
-    MC.camera.position.addSelf(MC.CAMERA_ORIGIN);
-    MC.camera.lookAt(MC.CAMERA_LOOK_AT);
+    MC.camera.position.addSelf(MC.camera_origin);
+    MC.camera.lookAt(MC.camera_look_at);
   });
   $("#game_container").noContext();
 
@@ -114,6 +107,7 @@ MC.update = function() {
     MC.stateStack[nStates-1].update(elapsed);
     MC.renderer.render(MC.scene, MC.camera);
     MC.stats.update();
+    TWEEN.update(currentTime);
     requestAnimationFrame(MC.update);
   } else {
     MC.log("ERROR: no more states :(");
@@ -209,8 +203,8 @@ MC.TitleState.prototype.activate = function() {
   });
 
   // set title position
-  topOffset = (MC.SCREEN_HEIGHT - $('#text_overlay').height()) / 2;
-  leftOffset = (MC.SCREEN_WIDTH - $('#text_overlay').width()) / 2;
+  topOffset = (MC.settings.screen_height - $('#text_overlay').height()) / 2;
+  leftOffset = (MC.settings.screen_width - $('#text_overlay').width()) / 2;
   $('#text_overlay').css({
     'top': topOffset + 'px',
     'left': leftOffset + 'px'
@@ -290,9 +284,9 @@ MC.PlayState = function() {
 
   // picking plane is used for click detection
   this.pickingPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(MC.CENTER_X * 2, 2000),
+    new THREE.PlaneGeometry(MC.settings.world_center_x * 2, 2000),
     new THREE.MeshBasicMaterial({ wireframe: true, color: 0x000000, opacity: 0.0 }));
-  this.pickingPlane.translateX(MC.CENTER_X);
+  this.pickingPlane.translateX(MC.settings.world_center_x);
   this.pickingPlane.translateY(500);
   MC.scene.add(this.pickingPlane);
 
@@ -311,8 +305,8 @@ MC.PlayState = function() {
           'color': 'red',
           'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
         });
-        topOffset = (MC.SCREEN_HEIGHT - $('#text_overlay').height()) / 2;
-        leftOffset = (MC.SCREEN_WIDTH - $('#text_overlay').width()) / 2;
+        topOffset = (MC.settings.screen_height - $('#text_overlay').height()) / 2;
+        leftOffset = (MC.settings.screen_width - $('#text_overlay').width()) / 2;
         $('#text_overlay').css({
           'top': topOffset + 'px',
           'left': leftOffset + 'px'
@@ -343,8 +337,8 @@ MC.PlayState = function() {
           'color': 'red',
           'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
         });
-        topOffset = (MC.SCREEN_HEIGHT - $('#text_overlay').height()) / 2;
-        leftOffset = (MC.SCREEN_WIDTH - $('#text_overlay').width()) / 2;
+        topOffset = (MC.settings.screen_height - $('#text_overlay').height()) / 2;
+        leftOffset = (MC.settings.screen_width - $('#text_overlay').width()) / 2;
         $('#text_overlay').css({
           'top': topOffset + 'px',
           'left': leftOffset + 'px'
@@ -388,8 +382,8 @@ MC.PlayState.prototype.onclick = function(evt) {
     case state.Loops.PlayLoop:
       // calc world space coord of mouse click
       var click = MC.getCanvasCoords(evt);
-      state.mouse2d.setX(((click.x / MC.SCREEN_WIDTH) * 2) - 1);
-      state.mouse2d.setY(((click.y / MC.SCREEN_HEIGHT) * -2) + 1);
+      state.mouse2d.setX(((click.x / MC.settings.screen_width) * 2) - 1);
+      state.mouse2d.setY(((click.y / MC.settings.screen_height) * -2) + 1);
       var ray = state.projector.pickingRay(state.mouse2d.clone(), MC.camera);
       var intersectors = ray.intersectObject(state.pickingPlane);
 
@@ -401,8 +395,8 @@ MC.PlayState.prototype.onclick = function(evt) {
       inBattlefield = 
         mslDest != undefined && 
         mslDest.x >= 0 &&
-        mslDest.x <= (MC.CENTER_X * 2) &&
-        mslDest.y >= MC.CITY_HEIGHT;
+        mslDest.x <= (MC.settings.world_center_x * 2) &&
+        mslDest.y >= MC.settings.city_height;
       
       // if destination is in battlefield, launch a missile 
       if(inBattlefield) {
@@ -423,7 +417,7 @@ MC.PlayState.prototype.onclick = function(evt) {
       }
       break;
     case state.Loops.EndLoop:
-      state.currentLoop.elapsed = MC.END_DURATION + 1;
+      state.currentLoop.elapsed = MC.settings.level_end_text_duration + 1;
       break;
   }
 
@@ -436,7 +430,7 @@ MC.PlayState.prototype.update = function(elapsed) {
   switch(this.currentLoop) {
     case this.Loops.TitleLoop:
       // end TitleLoop?
-      if(this.currentLoop.elapsed > MC.TITLE_DURATION) {
+      if(this.currentLoop.elapsed > MC.settings.level_title_duration) {
         this.setCurrentLoop(this.Loops.PlayLoop);
       }
       break;
@@ -447,7 +441,7 @@ MC.PlayState.prototype.update = function(elapsed) {
       break;
     case this.Loops.EndLoop:
       // end EndLoop?
-      if(this.currentLoop.elapsed > MC.END_DURATION) {
+      if(this.currentLoop.elapsed > MC.settings.level_end_text_duration) {
         if(this.level >= (this.levels.length-1)) {
           // no more levels, pop PlayState, leaves us with title state
           MC.stateStack[MC.stateStack.length-1].deactivate();
@@ -517,9 +511,9 @@ MC.Ground = function() {
   });
 
   // create mesh
-  this.geometry = new THREE.CubeGeometry(MC.CENTER_X * 2, 25, 200);
+  this.geometry = new THREE.CubeGeometry(MC.settings.world_center_x * 2, 25, 200);
   this.mesh = new THREE.Mesh(this.geometry, this.material);
-  this.mesh.translateX(MC.CENTER_X);
+  this.mesh.translateX(MC.settings.world_center_x);
   this.mesh.translateY(-12.5);
   MC.scene.add(this.mesh);
 };
@@ -545,9 +539,9 @@ MC.City = function(pos) {
   });
 
   this.centerX = 300 + (200 * pos);
-  this.geometry = new THREE.CubeGeometry(50, MC.CITY_HEIGHT, 50);
+  this.geometry = new THREE.CubeGeometry(50, MC.settings.city_height, 50);
   this.mesh = new THREE.Mesh(this.geometry, this.material);
-  this.mesh.position.set(this.centerX, MC.CITY_HEIGHT / 2, 0);
+  this.mesh.position.set(this.centerX, MC.settings.city_height / 2, 0);
   MC.scene.add(this.mesh);
 };
 
@@ -561,11 +555,11 @@ MC.City.prototype.removeSelf = function() {
  ****************/
 MC.Base = function(which) {
   if(which == 'left') {
-    this.centerX = MC.BASE_HEIGHT;
+    this.centerX = MC.settings.base_height;
   } else if(which == 'right') {
-    this.centerX = (MC.CENTER_X * 2) - MC.BASE_HEIGHT;
+    this.centerX = (MC.settings.world_center_x * 2) - MC.settings.base_height;
   }
-  this.geometry = new THREE.SphereGeometry(MC.BASE_HEIGHT, 16, 16,
+  this.geometry = new THREE.SphereGeometry(MC.settings.base_height, 16, 16,
     0, Math.PI * 2,
     0, Math.PI / 2);
   this.material = new THREE.MeshBasicMaterial({
@@ -597,14 +591,14 @@ MC.Missile.prototype.reset = function(opts) {
   this.type = opts.type || 'icbm';  // type=<'icbm' || 'cluster' || 'smart'>
 
   if(this.team == 'player') {
-    this.src = new THREE.Vector3(MC.bases[opts.side].centerX, MC.BASE_HEIGHT, 0);
+    this.src = new THREE.Vector3(MC.bases[opts.side].centerX, MC.settings.base_height, 0);
     this.dest = new THREE.Vector3(opts.dest.x, opts.dest.y, 0);
-    this.speed = MC.PLAYER_MISSILE_SPEED;
+    this.speed = MC.settings.player_missile_speed;
     color = 0x1197ff;
   } else if(this.team == 'enemy') {
     idx = Math.floor(Math.random() * 5);
-    this.src = new THREE.Vector3(Math.random() * (MC.CENTER_X * 2), 500, 0);
-    this.dest = new THREE.Vector3(MC.cities[idx].centerX, MC.CITY_HEIGHT / 2, 0);
+    this.src = new THREE.Vector3(Math.random() * (MC.settings.world_center_x * 2), 500, 0);
+    this.dest = new THREE.Vector3(MC.cities[idx].centerX, MC.settings.city_height / 2, 0);
     this.speed = opts.speed;
     color = 0xff4900;
   }
@@ -616,6 +610,12 @@ MC.Missile.prototype.reset = function(opts) {
   this.cosine = distX / this.totalDist;
   this.sine = distY / this.totalDist;
 
+  // prep for explosion updates
+  this.maxScale = MC.settings.explosion_end_radius / MC.settings.explosion_start_radius;
+  this.currentScale = 1.0;
+  this.scalingSpeed = this.maxScale / MC.settings.explosion_duration;
+
+  // prep for missile updates
   this.pos = new THREE.Vector3(this.src.x, this.src.y, 0);
   this.geometry = new THREE.Geometry();
   this.geometry.vertices.push(new THREE.Vector3(this.src.x, this.src.y, 0));
@@ -641,17 +641,35 @@ MC.Missile.prototype.update = function(elapsed) {
     // explode if missile reached destination
     if(this.src.distanceTo(this.pos) > this.totalDist) {
       this.live = false;
-      this.removeSelf();
-      this.geometry = new THREE.SphereGeometry(2, 16, 16);
-      this.material = new THREE.MeshBasicMaterial({ color: 0xa62f00 });
-      this.mesh = new THREE.Mesh(this.geometry, this.material);
-      MC.scene.add(this.mesh);
+      // fade out the missile line
+      var thisMsl = this;
+      var fadeOut = new TWEEN.Tween({ opacity: 1.0 });
+      fadeOut.to({ opacity : 0.0 }, MC.settings.explosion_duration);
+      fadeOut.easing(TWEEN.Easing.Circular.Out);;
+      fadeOut.onUpdate(function() {
+        thisMsl.material.opacity = this.opacity;
+      });
+      fadeOut.onComplete(function() {
+        thisMsl.removeSelf();
+      });
+      fadeOut.start();
+
+      // create the explosion
+      
+      //this.geometry = new THREE.SphereGeometry(MC.settings.explosion_start_radius, 16, 16);
+      //this.geometry.dynamic = true;
+      //this.material = new THREE.MeshBasicMaterial({ color: MC.settings.explosion_color });
+      //this.mesh = new THREE.Mesh(this.geometry, this.material);
+      //MC.scene.add(this.mesh);
     }
   }
 
   // explosion state
   if(!this.live) {
-    
+    //this.currentScale += this.scalingSpeed * elapsed;
+    //this.geometry.scale = this.currentScale;
+    //this.geometry.verticesNeedUpdate = true;  
+
   }
 
 };

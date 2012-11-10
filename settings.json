@@ -1,5 +1,31 @@
 {
   "settings": {
-    
+    "screen_width": 800,
+    "screen_height": 600,
+
+    "world_center_x": 700,
+    "world_center_y": 0,
+    "world_center_z": 0,
+
+    "ground_width": 1400,
+    "ground_height": 50,
+    "ground_depth": 50,
+
+    "city_width": 50,
+    "city_height": 100,
+    "city_depth": 50,     
+
+    "base_height": 50,
+    "base_radius": 50,
+
+    "player_missile_speed": 0.1,
+
+    "explosion_start_radius": 10,
+    "explosion_end_radius": 100,
+    "explosion_duration": 1500,
+    "explosion_color": "0xa62f00",
+
+    "level_title_duration": 3000,
+    "level_end_text_duration": 3000
   }
 }
