@@ -57,7 +57,6 @@ $(document).ready(function() {
   MC.stateStack.push(new MC.TitleState());
   MC.stateStack[MC.stateStack.length-1].activate();
 
-  // DEBUG: add mousemove scene scrolling
   // add to game_container so that scroll works with overlays
   $('#game_container').mousemove(function(evt) {
     var rect = MC.renderer.domElement.getBoundingClientRect();
@@ -288,7 +287,7 @@ MC.PlayState = function() {
   // picking plane is used for click detection
   this.pickingPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(MC.settings.world_center_x * 2, 2000),
-    new THREE.MeshBasicMaterial({ wireframe: true, color: 0x000000, opacity: 0.0 }));
+    new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, color: 0x000000, opacity: 0.0 }));
   this.pickingPlane.translateX(MC.settings.world_center_x);
   this.pickingPlane.translateY(500);
   MC.scene.add(this.pickingPlane);
@@ -506,7 +505,7 @@ MC.Ground = function() {
   groundTexture.wrapT = THREE.RepeatWrapping;
   groundTexture.anisotropy = 16;
   groundTexture.repeat.set(7, 3);
-  this.material = new THREE.MeshPhongMaterial({
+  this.material = new THREE.MeshLambertMaterial({
     map: groundTexture,
     color: 0x00ff00,
     ambient: 0x00ff00,
@@ -534,7 +533,7 @@ MC.City = function(pos) {
   buildingTexture.wrapS = THREE.RepeatWrapping;
   buildingTexture.wrapT = THREE.RepeatWrapping;
   buildingTexture.anisotropy = 16;
-  this.material = new THREE.MeshPhongMaterial({
+  this.material = new THREE.MeshLambertMaterial({
     map: buildingTexture,
     color: 0xffffff,
     ambient: 0xaaaaaa,
@@ -612,7 +611,7 @@ MC.Missile.prototype.reset = function(opts) {
   this.mslGeom.vertices.push(new THREE.Vector3(this.src.x, this.src.y, 0));
   this.mslGeom.vertices.push(new THREE.Vector3(this.src.x, this.src.y, 0));
   this.mslGeom.dynamic = true;
-  this.mslMat = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
+  this.mslMat = new THREE.LineBasicMaterial({ color: color, transparent: true, linewidth: 2 });
   this.mslMesh = new THREE.Line(this.mslGeom, this.mslMat);
   MC.scene.add(this.mslMesh);
 
@@ -633,10 +632,13 @@ MC.Missile.prototype.reset = function(opts) {
     thisMsl.live = false;
     // create the explosion
     thisMsl.explGeom = new THREE.SphereGeometry(MC.settings.explosion_radius, 16, 16);
-    thisMsl.explMat = new THREE.MeshBasicMaterial({ color: MC.settings.explosion_color });
+    thisMsl.explMat = new THREE.MeshBasicMaterial({ color: MC.settings.explosion_color, transparent: true });
     thisMsl.explMesh = new THREE.Mesh(thisMsl.explGeom, thisMsl.explMat);
     thisMsl.explMesh.position.copy(thisMsl.dest);
     MC.scene.add(thisMsl.explMesh);
+    thisMsl.explLight = new THREE.PointLight(MC.settings.explosion_color, 1000, 1000);
+    thisMsl.explLight.position.copy(thisMsl.dest);
+    MC.scene.add(thisMsl.explLight);
   });
 
   // fade out tween for missile trail
@@ -659,6 +661,7 @@ MC.Missile.prototype.reset = function(opts) {
   explFadeOut.easing(TWEEN.Easing.Bounce.InOut);
   explFadeOut.onUpdate(function() {
     thisMsl.explMat.opacity = this.opacity;
+    thisMsl.explLight.intensity = this.opacity * 1000;
   });
   explFadeOut.onComplete(function() {
     thisMsl.active = false;
@@ -666,73 +669,17 @@ MC.Missile.prototype.reset = function(opts) {
     thisMsl.explGeom = null;
     thisMsl.explMat = null;
     thisMsl.explMesh = null;
+    thisMsl.removeSelf(thisMsl.explLight);
+    thisMsl.explLight = null;
   });
 
+  // chain them together and start the sequence
   mslFadeOut.chain(explFadeOut);
   mover.chain(mslFadeOut);
   mover.start();
-
-
-  /*
-  // calculate sine/cosine for updates
-  distX = this.dest.x - this.src.x;
-  distY = this.dest.y - this.src.y;
-  this.cosine = distX / this.totalDist;
-  this.sine = distY / this.totalDist;
-
-  // prep for explosion updates
-  this.maxScale = MC.settings.explosion_end_radius / MC.settings.explosion_start_radius;
-  this.currentScale = 1.0;
-  this.scalingSpeed = this.maxScale / MC.settings.explosion_duration;
-  */
-
 };
 
 MC.Missile.prototype.update = function(elapsed) {
-  if(!this.active) {
-    return;
-  }
-
-  // missile state
-  if(this.live) {
-    /*
-    // update the missile position
-    this.pos.x += this.speed * elapsed * this.cosine;
-    this.pos.y += this.speed * elapsed * this.sine;
-    this.mslGeom.vertices[this.mslGeom.vertices.length-1].copy(this.pos);
-    this.mslGeom.verticesNeedUpdate = true;
-    // explode if missile reached destination
-    if(this.src.distanceTo(this.pos) > this.totalDist) {
-      this.live = false;
-      // set up and start fade out the missile line
-      var thisMsl = this;
-      var mslFadeOut = new TWEEN.Tween({ opacity: 1.0 });
-      mslFadeOut.to({ opacity : 0.0 }, MC.settings.explosion_duration);
-      mslFadeOut.easing(TWEEN.Easing.Circular.Out);;
-      mslFadeOut.onUpdate(function() {
-        thisMsl.mslMat.opacity = this.opacity;
-      });
-      mslFadeOut.onComplete(function() {
-        thisMsl.removeSelf(thisMsl.mslMesh);
-        thisMsl.mslGeom = null;
-        thisMsl.mslMat = null;
-        thisMsl.mslMesh = null;
-      });
-      mslFadeOut.start();
-
-      // set up explosion
-      MC.scene.add(this.mesh);
-    }
-    */
-  }
-
-  // explosion state
-  if(!this.live) {
-    //this.currentScale += this.scalingSpeed * elapsed;
-    //this.geometry.scale = this.currentScale;
-    //this.geometry.verticesNeedUpdate = true;
-
-  }
 
 };
 

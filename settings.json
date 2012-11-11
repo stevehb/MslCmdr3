@@ -20,7 +20,7 @@
 
     "player_missile_speed": 1.0,
 
-    "explosion_radius": 70,
+    "explosion_radius": 60,
     "explosion_duration": 1500,
     "explosion_color": "0xa62f00",
 
