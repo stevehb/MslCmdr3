@@ -6,20 +6,20 @@
       "waves": [
         {
           "missile_type": "icbm",
-          "progress_type": "count",
+          "missile_speed": 500,
+          "missile_color": "0xff0000",
+          "missile_rate_per_sec": 3,
+          "limit_type": "count",
           "limit": 50,
-          "rate_per_sec": 3,
-          "speed": 500,
-          "color": "0xff0000",
           "point_value": 100
         },
         {
           "missile_type": "icbm,cluster",
-          "progress_type": "time",
+          "missile_speed": 300,
+          "missile_color": "0xff7700",
+          "missile_rate_per_sec": 4,
+          "limit_type": "time",
           "limit": 15000,
-          "rate_per_sec": 4,
-          "speed": 300,
-          "color": "0xff7700",
           "point_value": 150
         }
       ]

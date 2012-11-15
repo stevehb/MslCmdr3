@@ -124,6 +124,11 @@ MC.getCanvasCoords = function(evt) {
   };
 }
 
+// get random int between min and max inclusive
+MC.getRandomInt = function(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 MC.log = function(msg) {
   console.log('MC: ' + msg);
 };
@@ -285,9 +290,13 @@ MC.PlayState = function() {
   MC.scene.add(MC.ambientLight);
 
   // picking plane is used for click detection
-  this.pickingPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(MC.settings.world_center_x * 2, 2000),
-    new THREE.MeshBasicMaterial({ wireframe: true, transparent: true, color: 0x000000, opacity: 0.0 }));
+  var pickGeom = new THREE.PlaneGeometry(MC.settings.world_center_x * 2, 2000);
+  var pickMat = new THREE.MeshBasicMaterial({ 
+    wireframe: true, 
+    transparent: true, 
+    color: 0x000000, 
+    opacity: 0.0 });
+  this.pickingPlane = new THREE.Mesh(pickGeom, pickMat);
   this.pickingPlane.translateX(MC.settings.world_center_x);
   this.pickingPlane.translateY(500);
   MC.scene.add(this.pickingPlane);
@@ -319,11 +328,25 @@ MC.PlayState = function() {
     PlayLoop: {
       elapsed: 0,
       wave: 0,
+      currentWave: '',
       waveProgress: 0,
-      rateProgress: 0,
-      rateElapsed: 0,
+      firingPause: 0,
+      firingPauseElapsed: 0,
+      missileTypes: '',
       init: function() {
         $('#text_overlay').empty();
+        this.initWave();
+      },
+      initWave: function() {
+        this.currentWave = state.levels[state.level].waves[this.wave];
+        this.firingPause = 1000 / this.currentWave.missile_rate_per_sec;
+        this.firingPauseElapsed = this.firingPause + 1;
+        this.missileTypes = this.currentWave.missile_type.split(',');
+      },
+      getType: function() {
+        // get integer index between [0 - this.missileTypes.length);
+        var idx = MC.getRandomInt(0, this.missileTypes.length-1);
+        return this.missileTypes[idx];
       }
     },
     EndLoop: {
@@ -427,7 +450,7 @@ MC.PlayState.prototype.onclick = function(evt) {
 };
 
 MC.PlayState.prototype.update = function(elapsed) {
-  var i;
+  var i, w;
   this.currentLoop.elapsed += elapsed;
   switch(this.currentLoop) {
     case this.Loops.TitleLoop:
@@ -437,9 +460,47 @@ MC.PlayState.prototype.update = function(elapsed) {
       }
       break;
     case this.Loops.PlayLoop:
+      // check wave, launch enemy missiles
+      w = this.currentLoop.currentWave; 
+      if(w.firingPauseElapsed > w.firingPause) {
+        var cityIdx = MC.getRandomInt(0, MC.cities.length-1);
+        var mslDest = { 
+        };
+        var opts = { 
+          team: 'enemy', 
+          type: w.getType(), 
+          dest: {
+            x: MC.cities[cityIdx].centerX,
+            y: MC.cities[cityIdx].height / 2
+          },
+          speed: w.missile_speed,
+          color: w.missile_color
+        };
+
+        // REFACTOR THIS TO A MC. function
+        // recycle old missile if possible, otherwise create a new one
+        var mslAdded = false;
+        for(i = 0; i < MC.missiles.length; i++) {
+          if(!MC.missiles[i].active) {
+            MC.missiles[i].reset(opts);
+            mslAdded = true;
+            break;
+          }
+        }
+        if(!mslAdded) {
+          MC.missiles.push(new MC.Missile(opts));
+        }
+      }
+
+      // update all missiles
       for(i = 0; i < MC.missiles.length; i++) {
         MC.missiles[i].update(elapsed);
       }
+
+      // check explosion and city collisions
+
+      // check level state, wait for missiles to finish
+
       break;
     case this.Loops.EndLoop:
       // end EndLoop?
@@ -473,6 +534,8 @@ MC.PlayState.prototype.setCurrentLoop = function(loop) {
         if(obj.hasOwnProperty(prop)) {
           if(typeof(obj[prop]) == "number") {
             obj[prop] = 0;
+          } else if(typeof(obj[prop] == "string")) {
+            //obj[prop] = '';
           }
         }
       }
@@ -541,9 +604,10 @@ MC.City = function(pos) {
   });
 
   this.centerX = 300 + (200 * pos);
-  this.geometry = new THREE.CubeGeometry(50, MC.settings.city_height, 50);
+  this.height = MC.settings.city_height;
+  this.geometry = new THREE.CubeGeometry(50, this.height, 50);
   this.mesh = new THREE.Mesh(this.geometry, this.material);
-  this.mesh.position.set(this.centerX, MC.settings.city_height / 2, 0);
+  this.mesh.position.set(this.centerX, this.height / 2, 0);
   MC.scene.add(this.mesh);
 };
 
@@ -585,7 +649,7 @@ MC.Missile = function(opts) {
 };
 
 MC.Missile.prototype.reset = function(opts) {
-  var idx, color, distX, distY;
+  var color;
 
   this.active = true;               // active=true: in play; active=false: spot avail;
   this.live = true;                 // live=true: missile; live=false: explosion;
@@ -598,11 +662,10 @@ MC.Missile.prototype.reset = function(opts) {
     this.speed = MC.settings.player_missile_speed;
     color = 0x1197ff;
   } else if(this.team == 'enemy') {
-    idx = Math.floor(Math.random() * 5);
-    this.src = new THREE.Vector3(Math.random() * (MC.settings.world_center_x * 2), 500, 0);
-    this.dest = new THREE.Vector3(MC.cities[idx].centerX, MC.settings.city_height / 2, 0);
+    this.src = new THREE.Vector3(MC.getRandomInt(0, MC.settings.world_center_x * 2), 500, 0);
+    this.dest = new THREE.Vector3(opts.dest.x, opts.dest.y, 0);
     this.speed = opts.speed;
-    color = 0xff4900;
+    color = parseInt(opts.color, 16);
   }
 
   // prep physical missile
