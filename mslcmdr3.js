@@ -18,12 +18,13 @@ $(document).ready(function() {
   // grab settings
   $.ajax({
     url: 'settings.json',
+    cache: false,
     dataType: 'text',
     async: false
   }).done(function(resp) {
     MC.settings = JSON.parse(resp).settings;
-    MC.settings.screen_width = $('#game_container').width();
-    MC.settings.screen_height = $('#game_container').height();
+    $('#game_container').width(MC.settings.screen_width);
+    $('#game_container').height(MC.settings.screen_height);
     if(typeof(MC.settings.explosion_color) == 'string') {
       MC.settings.explosion_color = parseInt(MC.settings.explosion_color, 16);
     }
@@ -31,11 +32,10 @@ $(document).ready(function() {
   this.level = 0;
 
   // program constants
-  MC.camera_origin = new THREE.Vector3(MC.settings.world_center_x, 350, 800);
-  MC.camera_look_at = new THREE.Vector3(MC.settings.world_center_x, 200, -200);
+  MC.camera_origin = new THREE.Vector3(MC.settings.world_center_x, 500, 1000);
+  MC.camera_look_at = new THREE.Vector3(MC.settings.world_center_x, 350, -200);
 
   // set up three.js basics
-  MC.log('setting up three.js basics');
   MC.scene = new THREE.Scene();
   MC.camera = new THREE.PerspectiveCamera(55, MC.settings.screen_width / MC.settings.screen_height, 1, 10000);
   MC.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -47,7 +47,6 @@ $(document).ready(function() {
   $('#game_container').append(MC.renderer.domElement);
 
   // set up extensions: stats counter, keyboard state, click handlers
-  MC.log('adding stats counter');
   MC.stats = new Stats();
   $('#perf_stats').append(MC.stats.domElement);
   MC.keyboard = new THREEx.KeyboardState();
@@ -117,7 +116,7 @@ MC.update = function() {
 };
 
 MC.getCanvasCoords = function(evt) {
-  var bb = $("#game_canvas")[0].getBoundingClientRect();
+  var bb = $('#game_canvas')[0].getBoundingClientRect();
   return {
     x: (evt.clientX - bb.left),
     y: (evt.clientY - bb.top)
@@ -230,7 +229,7 @@ MC.TitleState.prototype.activate = function() {
   });
 
   // add click event handler, disable text selector
-  $("#game_container").bind('mousedown', this.onclick);
+  $('#game_container').bind('mousedown', this.onclick);
   $('#text_overlay').find('*').css('cursor', 'default');
 };
 
@@ -238,7 +237,7 @@ MC.TitleState.prototype.deactivate = function() {
   MC.log('deactivating TitleState');
   $('#text_overlay').hide();
   $('#text_overlay').empty();
-  $("#game_container").unbind('mousedown', this.onclick);
+  $('#game_container').unbind('mousedown', this.onclick);
 };
 
 MC.TitleState.prototype.onclick = function(evt) {
@@ -262,6 +261,7 @@ MC.PlayState = function() {
   // grab the level descriptions
   $.ajax({
     url: 'level_desc.json',
+    cache: false,
     dataType: 'text',
     async: false
   }).done(function(resp) {
@@ -270,7 +270,6 @@ MC.PlayState = function() {
   this.level = 0;
 
   // for transforming 2d click to 3d position
-  this.projector = new THREE.Projector();
   this.mouse2d = new THREE.Vector3(0, 0, 0.5);
   this.mouse3d = new THREE.Vector3();
 
@@ -288,18 +287,6 @@ MC.PlayState = function() {
   };
   MC.ambientLight = new THREE.AmbientLight(0xaaaaaa);
   MC.scene.add(MC.ambientLight);
-
-  // picking plane is used for click detection
-  var pickGeom = new THREE.PlaneGeometry(MC.settings.world_center_x * 2, 2000);
-  var pickMat = new THREE.MeshBasicMaterial({ 
-    wireframe: true, 
-    transparent: true, 
-    color: 0x000000, 
-    opacity: 0.0 });
-  this.pickingPlane = new THREE.Mesh(pickGeom, pickMat);
-  this.pickingPlane.translateX(MC.settings.world_center_x);
-  this.pickingPlane.translateY(500);
-  MC.scene.add(this.pickingPlane);
 
   MC.log('state.level=' + state.level);
   this.Loops = {
@@ -327,21 +314,21 @@ MC.PlayState = function() {
     },
     PlayLoop: {
       elapsed: 0,
-      wave: 0,
-      currentWave: '',
-      waveProgress: 0,
-      firingPause: 0,
-      firingPauseElapsed: 0,
-      missileTypes: '',
+      levelProgress: 0,
+      playFinsihed: false,
+      enemyMissilePause: 0,
+      enemyMissileElapsed: 0,
+      levelMissileTypes: [],
       init: function() {
         $('#text_overlay').empty();
-        this.initWave();
+        this.initLevel();
       },
-      initWave: function() {
-        this.currentWave = state.levels[state.level].waves[this.wave];
-        this.firingPause = 1000 / this.currentWave.missile_rate_per_sec;
-        this.firingPauseElapsed = this.firingPause + 1;
-        this.missileTypes = this.currentWave.missile_type.split(',');
+      initLevel: function() {
+        this.levelProgress = 0;
+        this.playFinsihed = false;
+        this.enemyMissileElapsed = 0;
+        this.enemyMissilePause = 1000 / state.levels[state.level].missile_rate_per_sec;
+        this.missileTypes = state.levels[state.level].missile_types.split(',');
       },
       getType: function() {
         // get integer index between [0 - this.missileTypes.length);
@@ -388,13 +375,85 @@ MC.PlayState.prototype.activate = function() {
   MC.log('activating PlayState');
 
   // add click event handler
-  $("#game_canvas").bind('mousedown', this.onclick);
+  $('#game_canvas').bind('mousedown', this.onclick);
 };
 
 MC.PlayState.prototype.deactivate = function() {
   MC.log('deactivating PlayState');
-  $("#game_canvas").unbind('mousedown', this.onclick);
+  $('#game_canvas').unbind('mousedown', this.onclick);
   $('#score').hide();
+};
+
+MC.PlayState.prototype.update = function(elapsed) {
+  var i;
+  this.currentLoop.elapsed += elapsed;
+  switch(this.currentLoop) {
+    case this.Loops.TitleLoop:
+      var endLoop = this.currentLoop;
+      // end TitleLoop?
+      if(endLoop.elapsed > MC.settings.level_title_duration) {
+        this.setCurrentLoop(this.Loops.PlayLoop);
+      }
+      break;
+
+    case this.Loops.PlayLoop:
+      var playLoop = this.currentLoop;
+      // check enemy missile launch status
+      playLoop.enemyMissileElapsed += elapsed;
+      if(!playLoop.playFinsihed && playLoop.enemyMissileElapsed > playLoop.enemyMissilePause) {
+        var opts = {
+          team: 'enemy',
+          type: playLoop.getType(),
+          speed: this.levels[this.level].missile_speed,
+          color: this.levels[this.level].missile_color
+        };
+        MC.Missile.createNew(opts);
+
+        // update level progress
+        MC.log('levelProgress=' + playLoop.levelProgress);
+        if(this.levels[this.level].limit_type == 'count') {
+          playLoop.levelProgress++;
+        } else if(this.levels[this.level].limit_type == 'time') {
+          playLoop.levelProgress += playLoop.enemyMissilePause;
+        }
+        playLoop.enemyMissileElapsed -= playLoop.enemyMissilePause;
+      }
+
+      // update all missiles
+      var hasActiveEnemyMsl = false;
+      for(i = 0; i < MC.missiles.length; i++) {
+        MC.missiles[i].update(elapsed);
+        hasActiveEnemyMsl = hasActiveEnemyMsl || (MC.missiles[i].active && MC.missiles[i].team == 'enemy');
+      }
+
+      // check explosion and city collisions
+
+      // check level state, wait for missiles to finish
+      if(playLoop.levelProgress > this.levels[this.level].limit) {
+        playLoop.playFinsihed = true;
+        if(!hasActiveEnemyMsl) {
+          this.setCurrentLoop(this.Loops.EndLoop);
+        }
+      }
+      break;
+
+    case this.Loops.EndLoop:
+      var endLoop = this.currentLoop;
+      // end EndLoop?
+      if(endLoop.elapsed > MC.settings.level_end_text_duration) {
+        if(this.level >= (this.levels.length-1)) {
+          // no more levels, pop PlayState, leaves us with title state
+          MC.stateStack[MC.stateStack.length-1].deactivate();
+          MC.stateStack.pop();
+          MC.stateStack[MC.stateStack.length-1].activate();
+        } else {
+          // move along to next level in PlayState
+          this.level++;
+          this.setCurrentLoop(this.Loops.TitleLoop);
+        }
+      }
+      break;
+  }
 };
 
 MC.PlayState.prototype.onclick = function(evt) {
@@ -409,36 +468,21 @@ MC.PlayState.prototype.onclick = function(evt) {
       var click = MC.getCanvasCoords(evt);
       state.mouse2d.setX(((click.x / MC.settings.screen_width) * 2) - 1);
       state.mouse2d.setY(((click.y / MC.settings.screen_height) * -2) + 1);
-      var ray = state.projector.pickingRay(state.mouse2d.clone(), MC.camera);
-      var intersectors = ray.intersectObject(state.pickingPlane);
+      var mslDest = MC.ground.unproject(state.mouse2d.x, state.mouse2d.y);
 
-      // if use clicked over the battlefield, then add a missile
-      var mslDest, clickInBattlefield = false;
-      if(intersectors.length > 0) {
-        mslDest = intersectors[0].point;
-      }
+      // did user click over battlefield?
+      var clickInBattlefield = false;
       clickInBattlefield =
-        mslDest != undefined &&
+        mslDest != null &&
         mslDest.x >= 0 &&
         mslDest.x <= (MC.settings.world_center_x * 2) &&
         mslDest.y >= MC.settings.city_height;
 
-      // if destination is in battlefield, launch a missile
+      // if so, launch a missile
       if(clickInBattlefield) {
         var side = (evt.which == 1) ? 'left' : 'right';
         var opts = { team: 'player', type: 'icbm', side: side, dest: mslDest };
-        // recycle old missile if possible, otherwise create a new one
-        var mslAdded = false;
-        for(i = 0; i < MC.missiles.length; i++) {
-          if(!MC.missiles[i].active) {
-            MC.missiles[i].reset(opts);
-            mslAdded = true;
-            break;
-          }
-        }
-        if(!mslAdded) {
-          MC.missiles.push(new MC.Missile(opts));
-        }
+        MC.Missile.createNew(opts);
       }
       break;
     case state.Loops.EndLoop:
@@ -447,77 +491,6 @@ MC.PlayState.prototype.onclick = function(evt) {
   }
 
   return false;
-};
-
-MC.PlayState.prototype.update = function(elapsed) {
-  var i, w;
-  this.currentLoop.elapsed += elapsed;
-  switch(this.currentLoop) {
-    case this.Loops.TitleLoop:
-      // end TitleLoop?
-      if(this.currentLoop.elapsed > MC.settings.level_title_duration) {
-        this.setCurrentLoop(this.Loops.PlayLoop);
-      }
-      break;
-    case this.Loops.PlayLoop:
-      // check wave, launch enemy missiles
-      w = this.currentLoop.currentWave; 
-      if(w.firingPauseElapsed > w.firingPause) {
-        var cityIdx = MC.getRandomInt(0, MC.cities.length-1);
-        var mslDest = { 
-        };
-        var opts = { 
-          team: 'enemy', 
-          type: w.getType(), 
-          dest: {
-            x: MC.cities[cityIdx].centerX,
-            y: MC.cities[cityIdx].height / 2
-          },
-          speed: w.missile_speed,
-          color: w.missile_color
-        };
-
-        // REFACTOR THIS TO A MC. function
-        // recycle old missile if possible, otherwise create a new one
-        var mslAdded = false;
-        for(i = 0; i < MC.missiles.length; i++) {
-          if(!MC.missiles[i].active) {
-            MC.missiles[i].reset(opts);
-            mslAdded = true;
-            break;
-          }
-        }
-        if(!mslAdded) {
-          MC.missiles.push(new MC.Missile(opts));
-        }
-      }
-
-      // update all missiles
-      for(i = 0; i < MC.missiles.length; i++) {
-        MC.missiles[i].update(elapsed);
-      }
-
-      // check explosion and city collisions
-
-      // check level state, wait for missiles to finish
-
-      break;
-    case this.Loops.EndLoop:
-      // end EndLoop?
-      if(this.currentLoop.elapsed > MC.settings.level_end_text_duration) {
-        if(this.level >= (this.levels.length-1)) {
-          // no more levels, pop PlayState, leaves us with title state
-          MC.stateStack[MC.stateStack.length-1].deactivate();
-          MC.stateStack.pop();
-          MC.stateStack[MC.stateStack.length-1].activate();
-        } else {
-          // move along to next level in PlayState
-          this.level++;
-          this.setCurrentLoop(this.Loops.TitleLoop);
-        }
-      }
-      break;
-  }
 };
 
 MC.PlayState.prototype.addScore = function(points) {
@@ -535,6 +508,7 @@ MC.PlayState.prototype.setCurrentLoop = function(loop) {
           if(typeof(obj[prop]) == "number") {
             obj[prop] = 0;
           } else if(typeof(obj[prop] == "string")) {
+            // we should clear strings, but this also clears functions
             //obj[prop] = '';
           }
         }
@@ -581,6 +555,36 @@ MC.Ground = function() {
   this.mesh.translateX(MC.settings.world_center_x);
   this.mesh.translateY(-12.5);
   MC.scene.add(this.mesh);
+
+  // picking plane is used for click detection
+  var pickGeom = new THREE.PlaneGeometry(MC.settings.world_center_x * 2, 2000);
+  var pickMat = new THREE.MeshBasicMaterial({
+    wireframe: true,
+    transparent: true,
+    color: 0x000000,
+    opacity: 0.0 });
+  this.pickingPlane = new THREE.Mesh(pickGeom, pickMat);
+  this.pickingPlane.translateX(MC.settings.world_center_x);
+  this.pickingPlane.translateY(500);
+  MC.scene.add(this.pickingPlane);
+
+  // for unproject()
+  this.projector = new THREE.Projector();
+  this.point2d = new THREE.Vector3(0, 0, 0.5);
+};
+
+MC.Ground.prototype.unproject = function(x, y) {
+  this.point2d.x = x;
+  this.point2d.y = y;
+  var ray = this.projector.pickingRay(this.point2d, MC.camera);
+  var intersectors = ray.intersectObject(this.pickingPlane);
+
+  // if use clicked over the battlefield, then add a missile
+  if(intersectors.length > 0) {
+    return intersectors[0].point;
+  } else {
+    return null;
+  }
 };
 
 MC.Ground.prototype.removeSelf = function() {
@@ -648,13 +652,28 @@ MC.Missile = function(opts) {
   this.reset(opts);
 };
 
+MC.Missile.createNew = function(opts) {
+  // recycle old missile if possible, otherwise create a new one
+  var mslAdded = false;
+  for(i = 0; i < MC.missiles.length; i++) {
+    if(!MC.missiles[i].active) {
+      MC.missiles[i].reset(opts);
+      mslAdded = true;
+      break;
+    }
+  }
+  if(!mslAdded) {
+    MC.missiles.push(new MC.Missile(opts));
+  }
+}
+
 MC.Missile.prototype.reset = function(opts) {
   var color;
 
-  this.active = true;               // active=true: in play; active=false: spot avail;
-  this.live = true;                 // live=true: missile; live=false: explosion;
-  this.team = opts.team;            // team=<'player' || 'enemy'>
-  this.type = opts.type || 'icbm';  // type=<'icbm' || 'cluster' || 'smart'>
+  this.active = true;       // active=true: in use; active=false: spot avail;
+  this.live = true;         // live=true: missile; live=false: explosion;
+  this.team = opts.team;    // team=<'player' || 'enemy'>
+  this.type = opts.type;    // type=<'icbm' || 'cluster' || 'smart'>
 
   if(this.team == 'player') {
     this.src = new THREE.Vector3(MC.bases[opts.side].centerX, MC.settings.base_height, 0);
@@ -662,10 +681,14 @@ MC.Missile.prototype.reset = function(opts) {
     this.speed = MC.settings.player_missile_speed;
     color = 0x1197ff;
   } else if(this.team == 'enemy') {
-    this.src = new THREE.Vector3(MC.getRandomInt(0, MC.settings.world_center_x * 2), 500, 0);
-    this.dest = new THREE.Vector3(opts.dest.x, opts.dest.y, 0);
+    var cityIdx = MC.getRandomInt(0, MC.cities.length-1);
+    var randSrcX = ((MC.getRandomInt(0, MC.settings.screen_width) / MC.settings.screen_width) * 2) - 1;
+    this.src = MC.ground.unproject(randSrcX, 1.1);
+    this.dest = new THREE.Vector3(MC.cities[cityIdx].centerX, MC.cities[cityIdx].height / 2, 0);
     this.speed = opts.speed;
     color = parseInt(opts.color, 16);
+
+    MC.log('launching enemy missile from [' + this.src.x.toFixed(2) + ',' + this.src.y.toFixed(2) + ',' + this.src.z.toFixed(2) + ']');
   }
 
   // prep physical missile

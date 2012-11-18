@@ -3,32 +3,24 @@
     {
       "title": "Level 1",
       "end_text": "End of Level 1",
-      "waves": [
-        {
-          "missile_type": "icbm",
-          "missile_speed": 500,
-          "missile_color": "0xff0000",
-          "missile_rate_per_sec": 3,
-          "limit_type": "count",
-          "limit": 50,
-          "point_value": 100
-        },
-        {
-          "missile_type": "icbm,cluster",
-          "missile_speed": 300,
-          "missile_color": "0xff7700",
-          "missile_rate_per_sec": 4,
-          "limit_type": "time",
-          "limit": 15000,
-          "point_value": 150
-        }
-      ]
+      "missile_types": "icbm",
+      "missile_speed": 0.1,
+      "missile_color": "0xff0000",
+      "missile_rate_per_sec": 2,
+      "limit_type": "count",
+      "limit": 25,
+      "point_value": 100
     },
     {
       "title": "Level 2",
       "end_text": "End of Level 2",
-      "waves": [
-      ]
+      "missile_types": "icbm,cluster",
+      "missile_speed": 0.2,
+      "missile_color": "0xff7700",
+      "missile_rate_per_sec": 4,
+      "limit_type": "time",
+      "limit": 15000,
+      "point_value": 150
     }
   ]
 }
