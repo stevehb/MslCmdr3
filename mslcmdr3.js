@@ -385,7 +385,7 @@ MC.PlayState.prototype.deactivate = function() {
 };
 
 MC.PlayState.prototype.update = function(elapsed) {
-  var i;
+  var i, j;
   this.currentLoop.elapsed += elapsed;
   switch(this.currentLoop) {
     case this.Loops.TitleLoop:
@@ -423,10 +423,29 @@ MC.PlayState.prototype.update = function(elapsed) {
       var hasActiveEnemyMsl = false;
       for(i = 0; i < MC.missiles.length; i++) {
         MC.missiles[i].update(elapsed);
-        hasActiveEnemyMsl = hasActiveEnemyMsl || (MC.missiles[i].active && MC.missiles[i].team == 'enemy');
+        hasActiveEnemyMsl = hasActiveEnemyMsl || (MC.missiles[i].isActive && MC.missiles[i].team == 'enemy');
       }
 
-      // check explosion and city collisions
+      // check enemy missiles for hitting an explosion
+      for(i = 0; i < MC.missiles.length; i++) {
+        var isEnemy = MC.missiles[i].team == 'enemy';
+        var isMissile = MC.missiles[i].isMissile;
+        if(isEnemy && isMissile) {
+          for(j = 0; j < MC.missiles.length; j++) {
+            if(i != j && MC.missiles[j].isExplosion) {
+              var enemyMsl = MC.missiles[i];
+              var expl = MC.missiles[j];
+              var distSqr = enemyMsl.pos.distanceToSquared(expl.pos);
+              var explRad = MC.settings.explosion_radius;
+              if(distSqr <= (explRad * explRad)) {
+                enemyMsl.isMissile = false;
+                enemyMsl.explChain = expl.explChain + 1;
+                this.addScore(this.levels[this.level].point_value * enemyMsl.explChain + 1);
+              }
+            }
+          }
+        }
+      }
 
       // check level state, wait for missiles to finish
       if(playLoop.levelProgress > this.levels[this.level].limit) {
@@ -656,7 +675,7 @@ MC.Missile.createNew = function(opts) {
   // recycle old missile if possible, otherwise create a new one
   var mslAdded = false;
   for(i = 0; i < MC.missiles.length; i++) {
-    if(!MC.missiles[i].active) {
+    if(!MC.missiles[i].isActive) {
       MC.missiles[i].reset(opts);
       mslAdded = true;
       break;
@@ -670,10 +689,12 @@ MC.Missile.createNew = function(opts) {
 MC.Missile.prototype.reset = function(opts) {
   var color;
 
-  this.active = true;       // active=true: in use; active=false: spot avail;
-  this.live = true;         // live=true: missile; live=false: explosion;
-  this.team = opts.team;    // team=<'player' || 'enemy'>
-  this.type = opts.type;    // type=<'icbm' || 'cluster' || 'smart'>
+  this.isActive = true;       // isActive==true, then apply updates
+  this.isMissile = true;      // isMissile==true when in flight
+  this.isExplosion = false;   // isExplosion==true after missile destroyed
+  this.team = opts.team;      // team=<'player' || 'enemy'>
+  this.type = opts.type;      // type=<'icbm' || 'cluster' || 'smart'>
+  this.explChain = 0;
 
   if(this.team == 'player') {
     this.src = new THREE.Vector3(MC.bases[opts.side].centerX, MC.settings.base_height, 0);
@@ -701,72 +722,77 @@ MC.Missile.prototype.reset = function(opts) {
   this.mslMesh = new THREE.Line(this.mslGeom, this.mslMat);
   MC.scene.add(this.mslMesh);
 
-  // set up mover tween
-  this.totalDist = this.src.distanceTo(this.dest);
-  this.flightDuration = this.totalDist / this.speed;
+  // create fade out tween for missile trail
   var thisMsl = this;
-  var mover = new TWEEN.Tween({ x: this.src.x, y: this.src.y });
-  mover.to({ x: this.dest.x, y: this.dest.y }, this.flightDuration);
-  mover.easing(TWEEN.Easing.Linear.None);
-  mover.onUpdate(function() {
-    thisMsl.pos.x = this.x;
-    thisMsl.pos.y = this.y;
-    thisMsl.mslGeom.vertices[thisMsl.mslGeom.vertices.length-1].copy(thisMsl.pos);
-    thisMsl.mslGeom.verticesNeedUpdate = true;
-  });
-  mover.onComplete(function() {
-    thisMsl.live = false;
-    // create the explosion
-    thisMsl.explGeom = new THREE.SphereGeometry(MC.settings.explosion_radius, 16, 16);
-    thisMsl.explMat = new THREE.MeshBasicMaterial({ color: MC.settings.explosion_color, transparent: true });
-    thisMsl.explMesh = new THREE.Mesh(thisMsl.explGeom, thisMsl.explMat);
-    thisMsl.explMesh.position.copy(thisMsl.dest);
-    MC.scene.add(thisMsl.explMesh);
-    thisMsl.explLight = new THREE.PointLight(MC.settings.explosion_color, 1000, 1000);
-    thisMsl.explLight.position.copy(thisMsl.dest);
-    MC.scene.add(thisMsl.explLight);
-  });
-
-  // fade out tween for missile trail
-  var mslFadeOut = new TWEEN.Tween({ opacity: 1.0 });
-  mslFadeOut.to({ opacity: 0.0 }, MC.settings.explosion_duration / 2);
-  mslFadeOut.easing(TWEEN.Easing.Circular.Out);;
-  mslFadeOut.onUpdate(function() {
+  this.mslFadeTween = new TWEEN.Tween({ opacity: 1.0 });
+  this.mslFadeTween.to({ opacity: 0.0 }, MC.settings.explosion_duration / 2);
+  this.mslFadeTween.easing(TWEEN.Easing.Circular.Out);;
+  this.mslFadeTween.onUpdate(function() {
     thisMsl.mslMat.opacity = this.opacity;
   });
-  mslFadeOut.onComplete(function() {
+  this.mslFadeTween.onComplete(function() {
     thisMsl.removeSelf(thisMsl.mslMesh);
     thisMsl.mslGeom = null;
     thisMsl.mslMat = null;
     thisMsl.mslMesh = null;
   });
 
-  // fade out tween for explosion
-  var explFadeOut = new TWEEN.Tween({ opacity: 1.0 });
-  explFadeOut.to({ opacity: 0.0 }, MC.settings.explosion_duration);
-  explFadeOut.easing(TWEEN.Easing.Bounce.InOut);
-  explFadeOut.onUpdate(function() {
+  // create fade out tween for explosion
+  this.explFadeTween = new TWEEN.Tween({ opacity: 1.0 });
+  this.explFadeTween.to({ opacity: 0.0 }, MC.settings.explosion_duration);
+  this.explFadeTween.easing(TWEEN.Easing.Bounce.InOut);
+  this.explFadeTween.onUpdate(function() {
     thisMsl.explMat.opacity = this.opacity;
-    thisMsl.explLight.intensity = this.opacity * 1000;
   });
-  explFadeOut.onComplete(function() {
-    thisMsl.active = false;
+  this.explFadeTween.onComplete(function() {
+    thisMsl.isExplosion = false;
+    thisMsl.isActive = false;
     thisMsl.removeSelf(thisMsl.explMesh);
     thisMsl.explGeom = null;
     thisMsl.explMat = null;
     thisMsl.explMesh = null;
-    thisMsl.removeSelf(thisMsl.explLight);
-    thisMsl.explLight = null;
   });
 
-  // chain them together and start the sequence
-  mslFadeOut.chain(explFadeOut);
-  mover.chain(mslFadeOut);
-  mover.start();
+  // set up moverTween
+  this.totalDist = this.src.distanceTo(this.dest);
+  this.flightDuration = this.totalDist / this.speed;
+  this.moverTween = new TWEEN.Tween({ x: this.src.x, y: this.src.y });
+  this.moverTween.to({ x: this.dest.x, y: this.dest.y }, this.flightDuration);
+  this.moverTween.easing(TWEEN.Easing.Linear.None);
+  this.moverTween.onUpdate(function() {
+    thisMsl.pos.x = this.x;
+    thisMsl.pos.y = this.y;
+    thisMsl.mslGeom.vertices[thisMsl.mslGeom.vertices.length-1].copy(thisMsl.pos);
+    thisMsl.mslGeom.verticesNeedUpdate = true;
+  });
+  this.moverTween.onComplete(function() {
+    thisMsl.isMissile = false;
+    thisMsl.explChain = 0;
+  });
+
+  this.moverTween.start();
 };
 
 MC.Missile.prototype.update = function(elapsed) {
+  if(!this.isActive) {
+    return;
+  }
 
+  // msl --> expl transition
+  if(this.isMissile == false && this.isExplosion == false) {
+    // create the explosion
+    this.explGeom = new THREE.SphereGeometry(MC.settings.explosion_radius, 16, 16);
+    this.explMat = new THREE.MeshBasicMaterial({ color: MC.settings.explosion_color, transparent: true });
+    this.explMesh = new THREE.Mesh(this.explGeom, this.explMat);
+    this.explMesh.position.copy(this.pos);
+    MC.scene.add(this.explMesh);
+
+    // set animations
+    this.isExplosion = true;
+    this.moverTween.stop();
+    this.mslFadeTween.start();
+    this.explFadeTween.start();
+  }
 };
 
 MC.Missile.prototype.removeSelf = function(mesh) {
