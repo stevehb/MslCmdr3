@@ -25,6 +25,9 @@
     "explosion_color": "0xa62f00",
 
     "level_title_duration": 3000,
-    "level_end_text_duration": 3000
+    "level_end_text_duration": 3000,
+
+    "lose_text": "That's it man, game over man, game over.",
+    "win_text": "And they said the only way to win was not to play."
   }
 }
