@@ -77,7 +77,6 @@ $(document).ready(function() {
 });
 
 MC.update = function() {
-  var nStates;
   var currentTime = Date.now();
   var elapsed = currentTime - MC.lastTime;
   MC.lastTime = currentTime;
@@ -107,7 +106,7 @@ MC.update = function() {
     MC.camera.position.z);
 
   // update game and render
-  nStates = MC.stateStack.length;
+  var nStates = MC.stateStack.length;
   if(nStates > 0) {
     MC.stateStack[nStates-1].update(elapsed);
     MC.renderer.render(MC.scene, MC.camera);
@@ -359,6 +358,7 @@ MC.PlayState = function() {
         } else if(this.endGame) {
           endText = MC.settings.win_text;
         }
+        MC.log('setting EndLoop.endGame=' + this.endGame);
 
         // format, center, and display end text
         var topOffset, leftOffset;
@@ -494,7 +494,7 @@ MC.PlayState.prototype.update = function(elapsed) {
       // end EndLoop?
       if(endLoop.elapsed > MC.settings.level_end_text_duration) {
         // endGame previously set in endLoop.init()
-        if(this.endGame) {
+        if(endLoop.endGame) {
           // no more levels, pop PlayState, leaves us with title state
           MC.stateStack[MC.stateStack.length-1].deactivate();
           MC.stateStack.pop();
@@ -517,11 +517,6 @@ MC.PlayState.prototype.onclick = function(evt) {
       state.setCurrentLoop(state.Loops.PlayLoop);
       break;
     case state.Loops.PlayLoop:
-      // cancel launch if play is finished
-      if(state.currentLoop.playFinished) {
-        break;
-      }
-
       // calc world space coord of mouse click
       var click = MC.getCanvasCoords(evt);
       state.mouse2d.setX(((click.x / MC.settings.screen_width) * 2) - 1);
@@ -723,8 +718,10 @@ MC.City.getActive = function() {
     }
   }
   if(idxs.length == 0) {
+    MC.log('returning null city idx');
     return null;
   } else {
+    MC.log('there are ' + idxs.length + ' active cities');
     return idxs[MC.getRandomInt(0, idxs.length-1)];
   }
 }
@@ -845,11 +842,12 @@ MC.Missile.prototype.reset = function(opts) {
   });
 
   // set up moverTween
+  var easing = this.team == 'player' ? TWEEN.Easing.Quintic.In : TWEEN.Easing.Linear.None;
   this.totalDist = this.src.distanceTo(this.dest);
   this.flightDuration = this.totalDist / this.speed;
   this.moverTween = new TWEEN.Tween({ x: this.src.x, y: this.src.y });
   this.moverTween.to({ x: this.dest.x, y: this.dest.y }, this.flightDuration);
-  this.moverTween.easing(TWEEN.Easing.Linear.None);
+  this.moverTween.easing(easing);
   this.moverTween.onUpdate(function() {
     thisMsl.pos.x = this.x;
     thisMsl.pos.y = this.y;

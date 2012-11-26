@@ -18,7 +18,7 @@
     "base_height": 50,
     "base_radius": 50,
 
-    "player_missile_speed": 1.0,
+    "player_missile_speed": 1.5,
 
     "explosion_radius": 60,
     "explosion_duration": 1500,
