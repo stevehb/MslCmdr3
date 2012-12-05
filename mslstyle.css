@@ -3,36 +3,23 @@ body {
   font-family: Helvetica;
   color: white;
   background-color: #111111;
+  overflow: hidden;
 }
 
 div {
   border: solid 0px red;
 }
 
-.content {
-  margin: 0 auto;
-  padding: 0px;
-  display: block;
-  width: 825px;
-}
-
-.title {
-  margin: 0 auto;
-  width: 25%;
-  height: 30;
-  line-height: 30px;
-  text-align: center;
-  font-size: 14pt;
-  font-weight: lighter;
-  color: #ff7400;
+canvas {
+  width: 100%;
+  height: 100%;
 }
 
 .game_container {
-  position: relative;
-  border: 4px ridge gray;
-  margin: 0 auto;
-  width: 800px;
-  height: 480px;
+  position: absolute;
+  margin: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .score {

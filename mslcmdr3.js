@@ -23,8 +23,8 @@ $(document).ready(function() {
     async: false
   }).done(function(resp) {
     MC.settings = JSON.parse(resp).settings;
-    $('#game_container').width(MC.settings.screen_width);
-    $('#game_container').height(MC.settings.screen_height);
+    MC.settings.screen_width = $('#game_container').width();
+    MC.settings.screen_height = $('#game_container').height();
     if(typeof(MC.settings.explosion_color) == 'string') {
       MC.settings.explosion_color = parseInt(MC.settings.explosion_color, 16);
     }
@@ -38,7 +38,7 @@ $(document).ready(function() {
   // set up three.js basics
   var aspectRatio = MC.settings.screen_width / MC.settings.screen_height;
   MC.scene = new THREE.Scene();
-  MC.camera = new THREE.PerspectiveCamera(55, aspectRatio, 1, 10000);   
+  MC.camera = new THREE.PerspectiveCamera(55, aspectRatio, 1, 10000);
   MC.renderer = new THREE.WebGLRenderer({ antialias: true });
   MC.camera.position.copy(MC.camera_origin);
   MC.camera.lookAt(MC.camera_look_at);
@@ -46,6 +46,17 @@ $(document).ready(function() {
   MC.renderer.setClearColorHex(0x111111, 1.0);
   $(MC.renderer.domElement).attr('id', 'game_canvas');
   $('#game_container').append(MC.renderer.domElement);
+
+  // handle window resizing
+  $(window).resize(function(evt) {
+    // update the renderer and camera for the new size
+    MC.renderer.setSize( $('#game_container').width(), $('#game_container').height() );
+    MC.camera.aspect = $('#game_container').width() / $('#game_container').height();
+    MC.camera.updateProjectionMatrix();
+
+    MC.settings.screen_width = $('#game_container').width();
+    MC.settings.screen_height = $('#game_container').height();
+  });
 
   // set up extensions: stats counter, keyboard state, click handlers
   MC.stats = new Stats();
@@ -100,9 +111,9 @@ MC.update = function() {
   if(MC.keyboard.pressed('down')) {
     MC.camera.position.y -= 5;
   }
-  MC.debug('cam.pos=', 
+  MC.debug('cam.pos=',
     MC.camera.position.x,
-    MC.camera.position.y, 
+    MC.camera.position.y,
     MC.camera.position.z);
 
   // update game and render
@@ -148,7 +159,7 @@ MC.TitleState = function() {
 };
 
 MC.TitleState.prototype.activate = function() {
-  var i, topOffset, leftOffset, children;
+  var i, children;
 
   MC.log('activating TitleState');
   $('#score').hide();
@@ -210,16 +221,7 @@ MC.TitleState.prototype.activate = function() {
     'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
     'color': 'red'
   });
-
-  // set title position
-  topOffset = (MC.settings.screen_height - $('#text_overlay').height()) / 2;
-  leftOffset = (MC.settings.screen_width - $('#text_overlay').width()) / 2;
-  $('#text_overlay').css({
-    'top': topOffset + 'px',
-    'left': leftOffset + 'px'
-  });
-  leftOffset = ($('#text_overlay').width() - $('#title_overlay_subtitle').width()) / 2;
-  $('#title_overlay_subtitle').css({ 'margin-left': leftOffset + 'px' });
+  this.centerTitle();
 
   // add chained fade-ins on title letters
   $('.title_overlay,.title_overlay_small').css('display', 'none');
@@ -231,8 +233,9 @@ MC.TitleState.prototype.activate = function() {
     });
   });
 
-  // add click event handler, disable text selector
+  // add click/resize event handlers, disable text selector
   $('#game_container').bind('mousedown', this.onclick);
+  $(window).bind('resize', this.centerTitle);
   $('#text_overlay').find('*').css('cursor', 'default');
 };
 
@@ -241,6 +244,19 @@ MC.TitleState.prototype.deactivate = function() {
   $('#text_overlay').hide();
   $('#text_overlay').empty();
   $('#game_container').unbind('mousedown', this.onclick);
+  $(window).unbind('resize', this.centerTitle);
+};
+
+MC.TitleState.prototype.centerTitle = function() {
+  // set title position
+  var topOffset = (MC.settings.screen_height - $('#text_overlay').height()) / 2;
+  var leftOffset = (MC.settings.screen_width - $('#text_overlay').width()) / 2;
+  $('#text_overlay').css({
+    'top': topOffset + 'px',
+    'left': leftOffset + 'px'
+  });
+  leftOffset = ($('#text_overlay').width() - $('#title_overlay_subtitle').width()) / 2;
+  $('#title_overlay_subtitle').css({ 'margin-left': leftOffset + 'px' });
 };
 
 MC.TitleState.prototype.onclick = function(evt) {
@@ -445,7 +461,7 @@ MC.PlayState.prototype.update = function(elapsed) {
       var hasActiveEnemyMsl = false;
       for(i = 0; i < MC.missiles.length; i++) {
         MC.missiles[i].update(elapsed);
-        hasActiveEnemyMsl = hasActiveEnemyMsl || 
+        hasActiveEnemyMsl = hasActiveEnemyMsl ||
             (MC.missiles[i].isActive && MC.missiles[i].team == 'enemy');
       }
 
@@ -611,10 +627,10 @@ MC.Ground = function() {
   // picking plane is used for click detection
   var pickGeom = new THREE.PlaneGeometry(MC.settings.world_center_x * 2, 2000);
   var pickMat = new THREE.MeshBasicMaterial({
-    wireframe: true,
-    transparent: true,
-    color: 0x000000,
-    opacity: 0.0 });
+    wireframe: false,
+    transparent: false,
+    color: 0x333333,
+    opacity: 0.5 });
   this.pickingPlane = new THREE.Mesh(pickGeom, pickMat);
   this.pickingPlane.translateX(MC.settings.world_center_x);
   this.pickingPlane.translateY(500);
@@ -635,6 +651,8 @@ MC.Ground.prototype.unproject = function(x, y) {
   if(intersectors.length > 0) {
     return intersectors[0].point;
   } else {
+    console.log('no intersectors: ray=%o', ray);
+    MC.ray = ray;
     return null;
   }
 };
@@ -671,7 +689,7 @@ MC.City = function(pos) {
   MC.scene.add(this.mesh);
 };
 
-MC.City.prototype.hit = function() {  
+MC.City.prototype.hit = function() {
   // set up explosion mesh
   this.isActive = false;
   this.removeSelf();
@@ -795,6 +813,9 @@ MC.Missile.prototype.reset = function(opts) {
     this.cityIdx = MC.City.getActive() || MC.getRandomInt(0, MC.cities.length-1);
     var randSrcX = ((MC.getRandomInt(0, MC.settings.screen_width) / MC.settings.screen_width) * 2) - 1;
     this.src = MC.ground.unproject(randSrcX, 1.1);
+    if(this.src == null) {
+      MC.log('ERROR: null src when randSrcX=' + randSrcX.toFixed(3));
+    }
     this.dest = new THREE.Vector3(MC.cities[this.cityIdx].centerX, MC.cities[this.cityIdx].height / 2, 0);
     this.speed = opts.speed;
     color = parseInt(opts.color, 16);
