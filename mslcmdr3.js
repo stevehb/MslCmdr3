@@ -627,10 +627,10 @@ MC.Ground = function() {
   // picking plane is used for click detection
   var pickGeom = new THREE.PlaneGeometry(MC.settings.world_center_x * 2, 2000);
   var pickMat = new THREE.MeshBasicMaterial({
-    wireframe: false,
-    transparent: false,
-    color: 0x333333,
-    opacity: 0.5 });
+    wireframe: true,
+    transparent: true,
+    color: 0x000000,
+    opacity: 0 });
   this.pickingPlane = new THREE.Mesh(pickGeom, pickMat);
   this.pickingPlane.translateX(MC.settings.world_center_x);
   this.pickingPlane.translateY(500);
@@ -810,12 +810,14 @@ MC.Missile.prototype.reset = function(opts) {
     this.speed = MC.settings.player_missile_speed;
     color = 0x1197ff;
   } else if(this.team == 'enemy') {
-    this.cityIdx = MC.City.getActive() || MC.getRandomInt(0, MC.cities.length-1);
-    var randSrcX = ((MC.getRandomInt(0, MC.settings.screen_width) / MC.settings.screen_width) * 2) - 1;
-    this.src = MC.ground.unproject(randSrcX, 1.1);
+    var topPoint = MC.ground.unproject(0.0, 1.1);
+    var randSrcX = MC.getRandomInt(0, MC.settings.world_center_x * 2);
+    this.src = new THREE.Vector3(randSrcX, topPoint.y, 0);
     if(this.src == null) {
       MC.log('ERROR: null src when randSrcX=' + randSrcX.toFixed(3));
     }
+
+    this.cityIdx = MC.City.getActive() || MC.getRandomInt(0, MC.cities.length-1);
     this.dest = new THREE.Vector3(MC.cities[this.cityIdx].centerX, MC.cities[this.cityIdx].height / 2, 0);
     this.speed = opts.speed;
     color = parseInt(opts.color, 16);

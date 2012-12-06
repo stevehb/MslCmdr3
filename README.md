@@ -8,5 +8,8 @@ This is a 3D, in-browser version of the classic arcade game [Missile Command](ht
  * add support for cluster missiles
  * add point multiplier point displays over canvas
  * build out 4 levels
- * fix aspect ratio on horizontal window resize
  * make explosions grow and shrink
+
+### Done
+ * fixed null reference after enemy missiles' random x would be outside of the picking plane
+ * fix aspect ratio on horizontal window resize (not fixing)
