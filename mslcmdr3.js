@@ -886,10 +886,10 @@ MC.Missile.prototype.update = function(elapsed) {
 
     // create the explosion
     this.explGeom = new THREE.SphereGeometry(MC.settings.explosion_radius, 16, 16);
-    this.explMat = new THREE.MeshBasicMaterial({
-      color: MC.settings.explosion_color,
-      transparent: true,
-      opacity: 0.7
+    this.explMat = new THREE.ShaderMaterial({
+      vertexShader: MC.shaders['explosion_shader_vert'],
+      fragmentShader: MC.shaders['explosion_shader_frag'],
+      uniforms: { opacity: { type: 'f', value: 0.7 }}
     });
     this.explMesh = new THREE.Mesh(this.explGeom, this.explMat);
     this.explMesh.position.copy(this.pos);
