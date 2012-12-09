@@ -18,10 +18,10 @@
     "base_height": 50,
     "base_radius": 50,
 
-    "player_missile_speed": 2.5,
+    "player_missile_speed": 2.3,
 
     "explosion_radius": 60,
-    "explosion_duration": 1500,
+    "explosion_duration": 2500,
     "explosion_color": "0xa62f00",
 
     "level_title_duration": 3000,

@@ -17,10 +17,8 @@ $(document).ready(function() {
 
   // grab settings
   $.ajax({
-    url: 'settings.json',
-    cache: false,
-    dataType: 'text',
-    async: false
+    async: false, cached: false, dataType: 'text',
+    url: 'settings.json'
   }).done(function(resp) {
     MC.settings = JSON.parse(resp).settings;
     MC.settings.screen_width = $('#game_container').width();
@@ -29,7 +27,21 @@ $(document).ready(function() {
       MC.settings.explosion_color = parseInt(MC.settings.explosion_color, 16);
     }
   });
-  this.level = 0;
+
+  // load the shaders
+  MC.shaders = [];
+  $.ajax({
+    async: false, cached: false, dataType: 'text',
+    url: 'explosion_shader.vert'
+  }).done(function(resp) {
+    MC.shaders['explosion_shader_vert'] = resp;
+  });
+  $.ajax({
+    async: false, cached: false, dataType: 'text',
+    url: 'explosion_shader.frag'
+  }).done(function(resp) {
+    MC.shaders['explosion_shader_frag'] = resp;
+  });
 
   // program constants
   MC.camera_origin = new THREE.Vector3(MC.settings.world_center_x, 500, 1000);
@@ -111,10 +123,6 @@ MC.update = function() {
   if(MC.keyboard.pressed('down')) {
     MC.camera.position.y -= 5;
   }
-  MC.debug('cam.pos=',
-    MC.camera.position.x,
-    MC.camera.position.y,
-    MC.camera.position.z);
 
   // update game and render
   var nStates = MC.stateStack.length;
@@ -279,10 +287,10 @@ MC.PlayState = function() {
 
   // grab the level descriptions
   $.ajax({
-    url: 'level_desc.json',
-    cache: false,
+    async: false,
+    cached: false,
     dataType: 'text',
-    async: false
+    url: 'level_desc.json'
   }).done(function(resp) {
     state.levels = JSON.parse(resp).levels;
   });
@@ -448,7 +456,6 @@ MC.PlayState.prototype.update = function(elapsed) {
         MC.Missile.createNew(opts);
 
         // update level progress
-        MC.log('levelProgress=' + playLoop.levelProgress);
         if(this.levels[this.level].limit_type == 'count') {
           playLoop.levelProgress++;
         } else if(this.levels[this.level].limit_type == 'time') {
@@ -475,11 +482,11 @@ MC.PlayState.prototype.update = function(elapsed) {
               var enemyMsl = MC.missiles[i];
               var expl = MC.missiles[j];
               var distSqr = enemyMsl.pos.distanceToSquared(expl.pos);
-              var explRad = MC.settings.explosion_radius;
+              var explRad = MC.settings.explosion_radius * MC.missiles[j].explScale;
               if(distSqr <= (explRad * explRad)) {
                 enemyMsl.isMissile = false;
                 enemyMsl.explChain = expl.explChain + 1;
-                this.addScore(this.levels[this.level].point_value * enemyMsl.explChain + 1);
+                this.addScore(this.levels[this.level].point_value * (enemyMsl.explChain + 1));
               }
             }
           }
@@ -736,10 +743,8 @@ MC.City.getActive = function() {
     }
   }
   if(idxs.length == 0) {
-    MC.log('returning null city idx');
     return null;
   } else {
-    MC.log('there are ' + idxs.length + ' active cities');
     return idxs[MC.getRandomInt(0, idxs.length-1)];
   }
 }
@@ -803,6 +808,7 @@ MC.Missile.prototype.reset = function(opts) {
   this.explChain = 0;
   this.cityIdx = -1;
   this.hitTarget = false;
+  this.explScale = 1.0;
 
   if(this.team == 'player') {
     this.src = new THREE.Vector3(MC.bases[opts.side].centerX, MC.settings.base_height, 0);
@@ -813,10 +819,6 @@ MC.Missile.prototype.reset = function(opts) {
     var topPoint = MC.ground.unproject(0.0, 1.1);
     var randSrcX = MC.getRandomInt(0, MC.settings.world_center_x * 2);
     this.src = new THREE.Vector3(randSrcX, topPoint.y, 0);
-    if(this.src == null) {
-      MC.log('ERROR: null src when randSrcX=' + randSrcX.toFixed(3));
-    }
-
     this.cityIdx = MC.City.getActive() || MC.getRandomInt(0, MC.cities.length-1);
     this.dest = new THREE.Vector3(MC.cities[this.cityIdx].centerX, MC.cities[this.cityIdx].height / 2, 0);
     this.speed = opts.speed;
@@ -848,24 +850,8 @@ MC.Missile.prototype.reset = function(opts) {
     thisMsl.mslMesh = null;
   });
 
-  // create fade out tween for explosion
-  this.explFadeTween = new TWEEN.Tween({ opacity: 1.0 });
-  this.explFadeTween.to({ opacity: 0.0 }, MC.settings.explosion_duration);
-  this.explFadeTween.easing(TWEEN.Easing.Bounce.InOut);
-  this.explFadeTween.onUpdate(function() {
-    thisMsl.explMat.opacity = this.opacity;
-  });
-  this.explFadeTween.onComplete(function() {
-    thisMsl.isExplosion = false;
-    thisMsl.isActive = false;
-    thisMsl.removeSelf(thisMsl.explMesh);
-    thisMsl.explGeom = null;
-    thisMsl.explMat = null;
-    thisMsl.explMesh = null;
-  });
-
   // set up moverTween
-  var easing = this.team == 'player' ? TWEEN.Easing.Quintic.In : TWEEN.Easing.Linear.None;
+  var easing = this.team == 'player' ? TWEEN.Easing.Exponential.In : TWEEN.Easing.Linear.None;
   this.totalDist = this.src.distanceTo(this.dest);
   this.flightDuration = this.totalDist / this.speed;
   this.moverTween = new TWEEN.Tween({ x: this.src.x, y: this.src.y });
@@ -900,16 +886,41 @@ MC.Missile.prototype.update = function(elapsed) {
 
     // create the explosion
     this.explGeom = new THREE.SphereGeometry(MC.settings.explosion_radius, 16, 16);
-    this.explMat = new THREE.MeshBasicMaterial({ color: MC.settings.explosion_color, transparent: true });
+    this.explMat = new THREE.MeshBasicMaterial({
+      color: MC.settings.explosion_color,
+      transparent: true,
+      opacity: 0.7
+    });
     this.explMesh = new THREE.Mesh(this.explGeom, this.explMat);
     this.explMesh.position.copy(this.pos);
+    this.explScale = this.team == 'enemy' ? 0.001 : 0.001;
+    this.explMesh.scale.set(this.explScale, this.explScale, this.explScale);
     MC.scene.add(this.explMesh);
+
+    // create scaling tween for explosion
+    var thisExpl = this;
+    this.explScaleTween = new TWEEN.Tween({ scale: this.explScale });
+    this.explScaleTween.to({ scale: [ 1.0, 0.001 ] }, MC.settings.explosion_duration);
+    this.explScaleTween.interpolation(TWEEN.Interpolation.CatmullRom);
+    this.explScaleTween.easing(TWEEN.Easing.Cubic.Out);
+    this.explScaleTween.onUpdate(function() {
+      thisExpl.explScale = this.scale;
+      thisExpl.explMesh.scale.set(this.scale, this.scale, this.scale);;
+    });
+    this.explScaleTween.onComplete(function() {
+      thisExpl.isExplosion = false;
+      thisExpl.isActive = false;
+      thisExpl.removeSelf(thisExpl.explMesh);
+      thisExpl.explGeom = null;
+      thisExpl.explMat = null;
+      thisExpl.explMesh = null;
+    });
 
     // set animations
     this.isExplosion = true;
     this.moverTween.stop();
     this.mslFadeTween.start();
-    this.explFadeTween.start();
+    this.explScaleTween.start();
   }
 };
 
