@@ -87,8 +87,8 @@ $(document).ready(function() {
     var y = evt.clientY - rect.top;
     var pctX = (x - (MC.settings.screen_width / 2)) / (MC.settings.screen_width / 2);
     var pctY = (y - (MC.settings.screen_height / 2)) / (MC.settings.screen_height / 2);
-    var camOffsetX = pctX * 50;
-    var camOffsetY = pctY * 20;
+    var camOffsetX = pctX * 80;
+    var camOffsetY = pctY * 40;
     MC.camera.position.set(camOffsetX, camOffsetY, 0);
     MC.camera.position.addSelf(MC.camera_origin);
     MC.camera.lookAt(MC.camera_look_at);
@@ -105,24 +105,12 @@ MC.update = function() {
   MC.lastTime = currentTime;
 
   // DEBUG cam movement
-  if(MC.keyboard.pressed('w')) {
-    MC.camera.position.z -= 5;
-  }
-  if(MC.keyboard.pressed('s')) {
-    MC.camera.position.z += 5;
-  }
-  if(MC.keyboard.pressed('a')) {
-    MC.camera.position.x -= 5;
-  }
-  if(MC.keyboard.pressed('d')) {
-    MC.camera.position.x += 5;
-  }
-  if(MC.keyboard.pressed('up')) {
-    MC.camera.position.y += 5;
-  }
-  if(MC.keyboard.pressed('down')) {
-    MC.camera.position.y -= 5;
-  }
+  if(MC.keyboard.pressed('w')) { MC.camera.position.z -= 5; }
+  if(MC.keyboard.pressed('s')) { MC.camera.position.z += 5; }
+  if(MC.keyboard.pressed('a')) { MC.camera.position.x -= 5; }
+  if(MC.keyboard.pressed('d')) { MC.camera.position.x += 5; }
+  if(MC.keyboard.pressed('up')) { MC.camera.position.y += 5; }
+  if(MC.keyboard.pressed('down')) { MC.camera.position.y -= 5; }
 
   // update game and render
   var nStates = MC.stateStack.length;
@@ -143,6 +131,43 @@ MC.getCanvasCoords = function(evt) {
     x: (evt.clientX - bb.left),
     y: (evt.clientY - bb.top)
   };
+}
+
+MC.addScoreOverlay = function(x, y, msg) {
+  // create new elem and position
+  var randStr = Math.random().toString(36).substring(2);
+  var randId = '#' + randStr;
+  $('<div />', {
+    class: 'text_overlay',
+    style: '{ color: "yellow" }',
+    id: randStr,
+    text: msg
+  }).appendTo('#game_container');
+  var elemWidth = $(randId).width();
+  var elemHeight = $(randId).height();
+
+  var offsetX = x - (elemWidth / 2);
+  var offsetY = y - (elemHeight / 2);
+  MC.log('offset =[' + offsetX.toFixed(3) + ',' + offsetY.toFixed(3) + ']');
+
+  $(randId).css({
+    left: x - (elemWidth / 2),
+    top: y - (elemHeight / 2)
+  })
+
+  // add fade & rise, using tween
+  var top = $(randId).offset().top;
+  var tween = new TWEEN.Tween({ opacity: 1.0, posY: top });
+  tween.to({ opacity: 0.0, posY: top - elemHeight }, MC.settings.explosion_duration / 2);
+  tween.easing(TWEEN.Easing.Linear.None);
+  tween.onUpdate(function() {
+    $(randId).fadeTo(0, this.opacity);
+    $(randId).css({ top: this.posY });
+  });
+  tween.onComplete(function() {
+    $(randId).remove();
+  });
+  tween.start();
 }
 
 // get random int between min and max inclusive
@@ -484,9 +509,15 @@ MC.PlayState.prototype.update = function(elapsed) {
               var distSqr = enemyMsl.pos.distanceToSquared(expl.pos);
               var explRad = MC.settings.explosion_radius * MC.missiles[j].explScale;
               if(distSqr <= (explRad * explRad)) {
+                var points = this.levels[this.level].point_value;
+                // convert missile to explosion, add score
                 enemyMsl.isMissile = false;
                 enemyMsl.explChain = expl.explChain + 1;
-                this.addScore(this.levels[this.level].point_value * (enemyMsl.explChain + 1));
+                this.addScore(points * (enemyMsl.explChain + 1));
+                //console.log('enemyMsl=%o', enemyMsl);
+                var coords = MC.ground.project(enemyMsl.pos);
+                var msg = (enemyMsl.explChain == 1) ? points.toString() : 'X ' + enemyMsl.explChain;
+                MC.addScoreOverlay(coords.x, coords.y, msg);
               }
             }
           }
@@ -663,6 +694,16 @@ MC.Ground.prototype.unproject = function(x, y) {
     return null;
   }
 };
+
+MC.Ground.prototype.project = function(pos) {
+  var scrCoords = this.projector.projectVector(pos.clone(), MC.camera);
+  var halfWidth = MC.settings.screen_width / 2;
+  var halfHeight = MC.settings.screen_height / 2;
+  return {
+    x: (scrCoords.x * halfWidth) + halfWidth,
+    y: (-scrCoords.y * halfHeight) + halfHeight
+  }
+}
 
 MC.Ground.prototype.removeSelf = function() {
   MC.scene.remove(this.mesh);

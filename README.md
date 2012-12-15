@@ -6,12 +6,13 @@ This is a 3D, in-browser version of the classic arcade game [Missile Command](ht
 ### To do
  * prevent explosion chains from destroyed cities
  * add support for cluster missiles
- * add point multiplier point displays over canvas
  * build out 4 levels
- * make explosions grow and shrink
  * refactor explosions out of missile code
  * consider refactoring for events (MISSILE_ARRIVE, CITY_DESTROYED, etc)
+
 
 ### Done
  * fixed null reference after enemy missiles' random x would be outside of the picking plane
  * fix aspect ratio on horizontal window resize (not fixing)
+ * make explosions grow and shrink
+ * add point displays over canvas
