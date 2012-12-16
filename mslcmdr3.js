@@ -61,13 +61,13 @@ $(document).ready(function() {
 
   // handle window resizing
   $(window).resize(function(evt) {
-    // update the renderer and camera for the new size
-    MC.renderer.setSize( $('#game_container').width(), $('#game_container').height() );
-    MC.camera.aspect = $('#game_container').width() / $('#game_container').height();
-    MC.camera.updateProjectionMatrix();
-
     MC.settings.screen_width = $('#game_container').width();
     MC.settings.screen_height = $('#game_container').height();
+
+    // update the renderer and camera for the new size
+    MC.renderer.setSize(MC.settings.screen_width, MC.settings.screen_height);
+    MC.camera.aspect = MC.settings.screen_width / MC.settings.screen_height;
+    MC.camera.updateProjectionMatrix();
   });
 
   // set up extensions: stats counter, keyboard state, click handlers
@@ -81,7 +81,7 @@ $(document).ready(function() {
   MC.stateStack[MC.stateStack.length-1].activate();
 
   // add to game_container so that scroll works with overlays
-  $('#game_container').mousemove(function(evt) {
+  $('#game_container').bind('mousemove', function(evt) {
     var rect = MC.renderer.domElement.getBoundingClientRect();
     var x = evt.clientX - rect.left;
     var y = evt.clientY - rect.top;
@@ -138,28 +138,26 @@ MC.addScoreOverlay = function(x, y, msg) {
   var randStr = Math.random().toString(36).substring(2);
   var randId = '#' + randStr;
   $('<div />', {
-    class: 'text_overlay',
-    style: '{ color: "yellow" }',
-    id: randStr,
-    text: msg
+    'class': 'text_overlay',
+    'font-family': '"Cousine", sans-serif',
+    'id': randStr,
+    'text': msg
   }).appendTo('#game_container');
   var elemWidth = $(randId).width();
   var elemHeight = $(randId).height();
-
-  var offsetX = x - (elemWidth / 2);
-  var offsetY = y - (elemHeight / 2);
-  MC.log('offset =[' + offsetX.toFixed(3) + ',' + offsetY.toFixed(3) + ']');
-
   $(randId).css({
-    left: x - (elemWidth / 2),
-    top: y - (elemHeight / 2)
+    'color': 'yellow',
+    'text-shadow': '0 0 0.2em #ff0, 0 0 0.8em #ff0',
+    'cursor': 'default',
+    'left': x - (elemWidth / 2),
+    'top': y - (elemHeight / 2)
   })
 
   // add fade & rise, using tween
   var top = $(randId).offset().top;
   var tween = new TWEEN.Tween({ opacity: 1.0, posY: top });
-  tween.to({ opacity: 0.0, posY: top - elemHeight }, MC.settings.explosion_duration / 2);
-  tween.easing(TWEEN.Easing.Linear.None);
+  tween.to({ opacity: 0.0, posY: top - elemHeight }, MC.settings.explosion_duration / 4);
+  tween.easing(TWEEN.Easing.Exponential.In);
   tween.onUpdate(function() {
     $(randId).fadeTo(0, this.opacity);
     $(randId).css({ top: this.posY });
@@ -242,17 +240,16 @@ MC.TitleState.prototype.activate = function() {
     'margin-left': '8px',
     'margin-right': '8px',
     'font-size': '64pt',
-    'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
     'color': 'red',
-    'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
+    'text-shadow': '0 0 0.2em #000, 0 0 0.8em #f00'
   });
 
   $('.title_overlay_small').css({
     'margin-left': '2px',
     'margin-right': '2px',
     'font-size': '24pt',
-    'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
-    'color': 'red'
+    'color': 'red',
+    'text-shadow': '0 0 0'
   });
   this.centerTitle();
 
@@ -352,7 +349,6 @@ MC.PlayState = function() {
         $('#text_overlay').append(state.levels[state.level].title);
         $('#text_overlay').css({
           'font-size': '32pt',
-          'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
           'color': 'red',
           'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
         });
@@ -416,7 +412,6 @@ MC.PlayState = function() {
         $('#text_overlay').append(endText);
         $('#text_overlay').css({
           'font-size': '32pt',
-          'font-family': '"Century Gothic", CenturyGothic, AppleGothic, sans-serif',
           'color': 'red',
           'text-shadow': '0 0 0.2em #f00, 0 0 0.8em #f00'
         });

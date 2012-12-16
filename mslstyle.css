@@ -1,6 +1,6 @@
 body {
   margin: 0px;
-  font-family: Helvetica;
+  font-family: 'Audiowide', sans-serif;
   color: white;
   background-color: #111111;
   overflow: hidden;
@@ -23,6 +23,7 @@ canvas {
 }
 
 .score {
+  font-family: 'Cousine', sans-serif;
   position: absolute;
   top: 0px;
 }
