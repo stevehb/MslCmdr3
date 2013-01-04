@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+
+    <title>MslCmdr3 by stevehb</title>
+  </head>
+
+  <body>
+
+    <header>
+      <div class="container">
+        <h1>MslCmdr3</h1>
+        <h2>MslCmdr, now in 3D</h2>
+
+        <section id="downloads">
+          <a href="https://github.com/stevehb/MslCmdr3/zipball/master" class="btn">Download as .zip</a>
+          <a href="https://github.com/stevehb/MslCmdr3/tarball/master" class="btn">Download as .tar.gz</a>
+          <a href="https://github.com/stevehb/MslCmdr3" class="btn btn-github"><span class="icon"></span>View on GitHub</a>
+        </section>
+      </div>
+    </header>
+
+    <div class="container">
+      <section id="main_content">
+        <h2>MslCmdr 3</h2>
+
+<p>This is a 3D, in-browser version of the classic arcade game <a href="http://en.wikipedia.org/wiki/Missile_Command">Missile Command</a>. It makes heavy use of <a href="https://github.com/mrdoob/three.js/">three.js</a> and <a href="https://github.com/sole/tween.js">tween.js</a>.</p>
+
+<h2><a href="mslcmdr3.html">Play It Here</a></h2>
+
+<hr><h3>To do</h3>
+
+<ul>
+<li>FIX: prevent explosion chains from destroyed cities</li>
+<li>FIX: change in title's Y position at the end of the fade </li>
+<li>ADD: support for cluster missiles</li>
+<li>ADD: build out 4 levels</li>
+<li>refactor explosions out of missile code</li>
+<li>consider refactoring for events (MISSILE_ARRIVE, CITY_DESTROYED, etc)</li>
+</ul><h3>Done</h3>
+
+<ul>
+<li>fixed null reference after enemy missiles' random x would be outside of the picking plane</li>
+<li>fix aspect ratio on horizontal window resize (not fixing)</li>
+<li>make explosions grow and shrink</li>
+<li>add point displays over canvas</li>
+<li>add font stylings: web font, shadow/color on overlays</li>
+</ul>
+      </section>
+    </div>
+
+    
+  </body>
+</html>
