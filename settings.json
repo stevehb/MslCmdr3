@@ -1,0 +1,33 @@
+{
+  "settings": {
+    "screen_width": 0,
+    "screen_height": 0,
+
+    "world_center_x": 700,
+    "world_center_y": 0,
+    "world_center_z": 0,
+
+    "ground_width": 1400,
+    "ground_height": 50,
+    "ground_depth": 50,
+
+    "city_width": 50,
+    "city_height": 100,
+    "city_depth": 50,
+
+    "base_height": 50,
+    "base_radius": 50,
+
+    "player_missile_speed": 2.3,
+
+    "explosion_radius": 60,
+    "explosion_duration": 2500,
+    "explosion_color": "0xa62f00",
+
+    "level_title_duration": 3000,
+    "level_end_text_duration": 3000,
+
+    "lose_text": "That's it man, game over man, game over.",
+    "win_text": "And they said the only way to win was not to play."
+  }
+}

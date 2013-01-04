@@ -1,0 +1,45 @@
+body {
+  margin: 0px;
+  font-family: 'Audiowide', sans-serif;
+  color: white;
+  background-color: #111111;
+  overflow: hidden;
+}
+
+div {
+  border: solid 0px red;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.game_container {
+  position: absolute;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.score {
+  font-family: 'Cousine', sans-serif;
+  position: absolute;
+  top: 0px;
+}
+
+.perf_stats {
+  position: absolute;
+  top: 0px;
+  right: 0px;
+}
+
+.text_overlay {
+  position: absolute;
+}
+
+.debug_text {
+  position: absolute;
+  bottom: 0px;
+  left: 0px;
+}
